@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 1 — Foundation **(scaffold landed)**
+**Current phase:** Phase 2 — Admin auth + dashboard **(landed; awaits live Vercel verification)**
 **Last updated:** 2026-04-29
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -46,10 +46,11 @@ The `(1)` / `(5)` upload duplicates have been removed.
 - [x] Seed script: super admin + sample assessment
 
 ### Phase 2 — Admin auth + dashboard
-- [ ] NextAuth email/password
-- [ ] `/admin/login` and session handling
-- [ ] `/admin/dashboard` (active + closed assessments)
-- [ ] Role gating (super_admin vs. admin)
+- [x] NextAuth email/password (credentials provider, JWT session, bcrypt verification)
+- [x] `/admin/login` and session handling
+- [x] `/admin/dashboard` (active + closed assessments)
+- [x] Role gating (super_admin vs. admin) — header nav exposes super-admin links only to super admins; `requireSuperAdmin()` server-side guard for protected pages
+- [ ] Live Vercel verification: log in with seeded super admin → land on dashboard → see "Acme Corp (sample)" → sign out → log in again *(awaits user)*
 
 ### Phase 3 — Assessment lifecycle (admin side)
 - [ ] `/admin/assessments/new` form with departments, deadline, respondents
@@ -121,6 +122,7 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 | Date | Phase | Change |
 |------|-------|--------|
+| 2026-04-29 | 2 | Phase 2 landed: NextAuth v5 credentials provider with bcrypt + Zod; JWT session augmented with `id` + `role`; `proxy.ts` (Next 16's renamed middleware) gates `/admin/*` for unauthed users and bounces authed users away from `/admin/login`; `src/lib/admin-guard.ts` provides `requireAdmin()` / `requireSuperAdmin()` server-side helpers; `/admin/login` page (server component + client form using `signIn` from `next-auth/react`); `/admin/layout.tsx` with header nav (super-admin links visible only to super admins) + sign-out form action; `/admin/dashboard` listing collecting + closed assessments grouped by status. Verified with `npx tsc --noEmit` and `npm run build` (6 routes). |
 | 2026-04-29 | 1 | DB workflow split into two surfaces: `npm run db:*` for users with a terminal, hand-runnable SQL files in `prisma/sql/` for users with only the Neon SQL editor. Generated `000_initial_schema.sql` (via `prisma migrate diff`) and `001_seed_sample_data.sql` (via `scripts/gen-seed-sql.mjs`). Documented in CLAUDE.md, README, and `prisma/sql/README.md`. |
 | 2026-04-29 | 1 | Phase 1 scaffold landed: package.json (Next 16 / React 19 / Prisma 5 / NextAuth v5 / Tailwind 3), tsconfig, next.config.mjs, tailwind.config.ts, postcss.config.mjs, .eslintrc, .gitignore, .env.example. |
 | 2026-04-29 | 1 | Prisma schema written for 8 tables (`Admin`, `Assessment`, `Department`, `Respondent`, `Response`, `Settings`, `GeneratedReport`, `AuditLog`) plus 5 enums. Mirrors `PROJECT_DETAILS.md`. |
