@@ -137,7 +137,11 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 ## 4. Active blockers
 
-None.
+None blocking the build.
+
+### Deferred items (revisit before any production deploy)
+
+- **Rotate the Neon `neondb_owner` password.** A connection string with the live password was pasted into a chat transcript on 2026-04-29 and should be considered compromised. User explicitly chose to defer rotation to keep momentum. Action: reset the role password in Neon Console → Roles → `neondb_owner`, then update `DATABASE_URL` in `.env.local` (and Vercel env vars when deployed). **This must happen before any non-local data is in the DB.**
 
 > When something blocks progress, add an entry here describing: what's blocked, why, what unblocks it, who needs to act. Remove when resolved.
 
