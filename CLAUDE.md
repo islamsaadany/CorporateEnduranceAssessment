@@ -248,7 +248,10 @@ Database credentials are stored in `.env.local` (gitignored) for security.
 - OpenAI: https://platform.openai.com/api-keys
 - Claude: https://console.anthropic.com/settings/keys
 
-**Usage:** Claude Code sessions **do not** have `DATABASE_URL` and **cannot** push schema changes themselves. Whenever you edit `prisma/schema.prisma` (or any other change that requires a DB operation), tell the user exactly which `npm run` command to copy:
+**Usage:** Claude Code sessions **do not** have `DATABASE_URL` and **cannot** push schema changes themselves. There are two surfaces for DB operations; pick based on what the user has access to.
+
+### Option A — user has a local terminal
+Tell them to run one of these `npm run` scripts:
 
 | When | Command for the user to run |
 |------|-----------------------------|
@@ -258,7 +261,25 @@ Database credentials are stored in `.env.local` (gitignored) for security.
 | Want to inspect rows | `npm run db:studio` |
 | Regenerate Prisma client only | `npm run db:generate` |
 
-**Never** attempt `npx prisma db push` yourself — it will fail without credentials. **Never** suggest the user do it differently — these `npm run db:*` scripts are the canonical surface (defined in `package.json`).
+### Option B — user only has the Neon SQL editor
+Some users have **no local terminal** — they can only paste SQL into Neon's SQL editor. For them, the canonical surface is the hand-runnable files in `prisma/sql/`. Whenever you change `prisma/schema.prisma` or `prisma/seed.ts`:
+
+1. Regenerate `prisma/sql/000_initial_schema.sql` with:
+   ```bash
+   npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/sql/000_initial_schema.sql
+   ```
+   For follow-up schema changes, generate a `00N_<description>.sql` file containing **only the diff** from the previous schema state (use `--from-schema-datasource` or `--from-schema-datamodel` against the prior file).
+
+2. Regenerate `prisma/sql/001_seed_sample_data.sql` if seed logic changed:
+   ```bash
+   node scripts/gen-seed-sql.mjs > prisma/sql/001_seed_sample_data.sql
+   ```
+
+3. Commit the regenerated SQL **alongside** the Prisma changes in the same commit. The two must always agree.
+
+4. Tell the user **exactly** which numbered file(s) to paste into Neon's SQL editor, in order.
+
+**Never** attempt `npx prisma db push` against the user's DB — it requires credentials we don't have. **Never** ask the user to paste their `DATABASE_URL` into chat. The `prisma/sql/` files and the `npm run db:*` scripts are the **only** two acceptable handoff surfaces.
 
 ### Build Commands
 ```bash

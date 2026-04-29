@@ -21,7 +21,9 @@ The `(1)` / `(5)` upload duplicates have been removed.
 
 **In progress:** Phase 1 scaffold landed — Next.js 16 + Tailwind config, Prisma schema (8 tables matching `PROJECT_DETAILS.md`), `src/lib/prisma.ts`, shared `types.ts` + `constants.ts`, minimal `app/layout.tsx` + landing page, `prisma/seed.ts` (super admin + sample assessment with 5 respondents, 3 submitted), `.env.example`, `.gitignore`, README setup section.
 
-**Awaiting:** User to run `npm install`, `npx prisma db push`, `npm run seed`, `npm run dev` against their Neon DB to verify the scaffold boots and the seed data is present. Once confirmed, Phase 2 (admin auth + dashboard) begins.
+**DB workflow (decided 2026-04-29):** the user has access to the Neon SQL editor only — no local terminal. Hand-runnable SQL files live in `prisma/sql/` (`000_initial_schema.sql` + `001_seed_sample_data.sql`) and are kept in sync with `prisma/schema.prisma` and `prisma/seed.ts` by the Claude session. When schema or seed changes, the session regenerates the SQL files and tells the user exactly which to paste into Neon. The `npm run db:*` scripts remain available for any future user with a local terminal.
+
+**Awaiting:** User to paste `prisma/sql/000_initial_schema.sql` then `prisma/sql/001_seed_sample_data.sql` into the Neon SQL editor to apply the schema and seed data. Once confirmed (super admin + sample assessment present), Phase 2 (admin auth + dashboard) begins.
 
 ---
 
@@ -40,7 +42,7 @@ The `(1)` / `(5)` upload duplicates have been removed.
 ### Phase 1 — Foundation
 - [x] Next.js 16 + Tailwind project scaffold
 - [x] Prisma schema (admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports)
-- [ ] Neon DB connected, schema pushed *(awaits user — needs DATABASE_URL credentials)*
+- [ ] Neon DB connected, schema pushed *(awaits user — paste `prisma/sql/000_initial_schema.sql` then `prisma/sql/001_seed_sample_data.sql` into Neon SQL editor)*
 - [x] Seed script: super admin + sample assessment
 
 ### Phase 2 — Admin auth + dashboard
@@ -119,6 +121,7 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 | Date | Phase | Change |
 |------|-------|--------|
+| 2026-04-29 | 1 | DB workflow split into two surfaces: `npm run db:*` for users with a terminal, hand-runnable SQL files in `prisma/sql/` for users with only the Neon SQL editor. Generated `000_initial_schema.sql` (via `prisma migrate diff`) and `001_seed_sample_data.sql` (via `scripts/gen-seed-sql.mjs`). Documented in CLAUDE.md, README, and `prisma/sql/README.md`. |
 | 2026-04-29 | 1 | Phase 1 scaffold landed: package.json (Next 16 / React 19 / Prisma 5 / NextAuth v5 / Tailwind 3), tsconfig, next.config.mjs, tailwind.config.ts, postcss.config.mjs, .eslintrc, .gitignore, .env.example. |
 | 2026-04-29 | 1 | Prisma schema written for 8 tables (`Admin`, `Assessment`, `Department`, `Respondent`, `Response`, `Settings`, `GeneratedReport`, `AuditLog`) plus 5 enums. Mirrors `PROJECT_DETAILS.md`. |
 | 2026-04-29 | 1 | `src/lib/prisma.ts`, `src/data/types.ts`, `src/data/constants.ts` (pillar/capability/band/level/tenure metadata, ≥3 guardrail constant). |

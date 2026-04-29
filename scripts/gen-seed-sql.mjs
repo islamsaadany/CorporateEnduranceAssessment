@@ -1,0 +1,156 @@
+// One-off generator: emits a SQL seed file from the same logic as
+// prisma/seed.ts, so the user can paste it into Neon's SQL editor when
+// they don't have a local Node environment.
+//
+// Run with: node scripts/gen-seed-sql.mjs > prisma/sql/001_seed_sample_data.sql
+//
+// Idempotent: the SQL it emits clears any prior "Acme Corp (sample)"
+// assessment, then re-inserts. The super admin row uses ON CONFLICT
+// (email) DO UPDATE so re-running is safe.
+
+import bcrypt from 'bcryptjs'
+import { randomUUID } from 'node:crypto'
+
+// --- Inputs (mirroring SEED_SUPER_ADMIN_* env vars in seed.ts) ---
+const SUPER_ADMIN_EMAIL = 'superadmin@forefront.example'
+const SUPER_ADMIN_PASSWORD = 'change-me-on-first-login'
+const SUPER_ADMIN_NAME = 'Super Admin'
+
+// --- Question IDs: 1a, 1b, 2a, 2b, ..., 15a, 15b ---
+const QUESTION_IDS = []
+for (let n = 1; n <= 15; n++) {
+  QUESTION_IDS.push(`${n}a`, `${n}b`)
+}
+
+// --- Code generator (no 0/O/1/I/L) ---
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+function genCode() {
+  let out = ''
+  for (let i = 0; i < 6; i++) {
+    out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
+  }
+  return out
+}
+
+// Same deterministic-ish answer pattern as seed.ts
+function answerFor(respondentIndex, questionIndex) {
+  const base = 2 + ((respondentIndex * 7 + questionIndex * 3) % 4)
+  return Math.max(1, Math.min(5, base))
+}
+
+const sqlEscape = (s) => s.replace(/'/g, "''")
+
+async function main() {
+  const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 10)
+  const adminId = randomUUID()
+  const assessmentId = randomUUID()
+  const salesId = randomUUID()
+  const engId = randomUUID()
+
+  const respondents = [
+    { id: randomUUID(), code: genCode(), departmentId: salesId, level: 'manager',                 tenure: 'y4_7',   name: 'Avery R.', submit: true  },
+    { id: randomUUID(), code: genCode(), departmentId: salesId, level: 'senior_leader',           tenure: 'y8_15',  name: 'Blake S.', submit: true  },
+    { id: randomUUID(), code: genCode(), departmentId: engId,   level: 'executive',               tenure: 'gt_15y', name: 'Casey T.', submit: true  },
+    { id: randomUUID(), code: genCode(), departmentId: engId,   level: 'team_lead',               tenure: 'y1_3',   name: 'Drew V.',  submit: false },
+    { id: randomUUID(), code: genCode(), departmentId: engId,   level: 'individual_contributor',  tenure: 'lt_1y',  name: null,       submit: false },
+  ]
+
+  const out = []
+  out.push(`-- Seed sample data for The Endurance Assessment.`)
+  out.push(`-- Run AFTER 000_initial_schema.sql.`)
+  out.push(`-- Mirrors prisma/seed.ts. Idempotent for the assessment row; ON CONFLICT for the super admin.`)
+  out.push(``)
+  out.push(`BEGIN;`)
+  out.push(``)
+
+  // --- Super admin (idempotent on email) ---
+  out.push(`-- Super admin`)
+  out.push(`INSERT INTO "Admin" ("id", "email", "passwordHash", "name", "role", "isActive", "createdAt", "updatedAt")`)
+  out.push(`VALUES ('${adminId}', '${SUPER_ADMIN_EMAIL}', '${sqlEscape(passwordHash)}', '${SUPER_ADMIN_NAME}', 'super_admin', TRUE, NOW(), NOW())`)
+  out.push(`ON CONFLICT ("email") DO UPDATE SET`)
+  out.push(`  "role" = 'super_admin',`)
+  out.push(`  "isActive" = TRUE,`)
+  out.push(`  "name" = EXCLUDED."name",`)
+  out.push(`  "passwordHash" = EXCLUDED."passwordHash",`)
+  out.push(`  "updatedAt" = NOW();`)
+  out.push(``)
+
+  // We need the actual admin id (in case the row already existed). Capture it.
+  out.push(`-- Capture the super admin's id (whether it was newly inserted or already existed).`)
+  out.push(`-- Subsequent inserts reference this via a temp table.`)
+  out.push(`CREATE TEMP TABLE _seed_admin AS SELECT "id" FROM "Admin" WHERE "email" = '${SUPER_ADMIN_EMAIL}';`)
+  out.push(``)
+
+  // --- Settings singleton (idempotent) ---
+  out.push(`-- Settings singleton`)
+  out.push(`INSERT INTO "Settings" ("id", "aiProvider", "promptVersion", "updatedAt")`)
+  out.push(`VALUES ('singleton', 'gemini', 1, NOW())`)
+  out.push(`ON CONFLICT ("id") DO NOTHING;`)
+  out.push(``)
+
+  // --- Sample assessment: idempotent by deleting the prior sample ---
+  out.push(`-- Sample assessment "Acme Corp (sample)" — delete prior copy if any (cascades to children)`)
+  out.push(`DELETE FROM "Assessment" WHERE "clientName" = 'Acme Corp (sample)';`)
+  out.push(``)
+
+  out.push(`INSERT INTO "Assessment" ("id", "clientName", "status", "deadline", "createdById", "createdAt", "updatedAt")`)
+  out.push(`SELECT '${assessmentId}', 'Acme Corp (sample)', 'collecting', NOW() + INTERVAL '14 days', _seed_admin."id", NOW(), NOW()`)
+  out.push(`FROM _seed_admin;`)
+  out.push(``)
+
+  out.push(`-- Departments`)
+  out.push(`INSERT INTO "Department" ("id", "assessmentId", "name", "createdAt") VALUES`)
+  out.push(`  ('${salesId}', '${assessmentId}', 'Sales',       NOW()),`)
+  out.push(`  ('${engId}',   '${assessmentId}', 'Engineering', NOW());`)
+  out.push(``)
+
+  // --- Respondents ---
+  out.push(`-- Respondents (5 total: 3 submitted, 1 in-progress, 1 fresh)`)
+  const respondentRows = respondents.map((r, i) => {
+    const startedAt = i < 4 ? 'NOW()' : 'NULL'
+    const submittedAt = r.submit ? 'NOW()' : 'NULL'
+    const nameSql = r.name === null ? 'NULL' : `'${sqlEscape(r.name)}'`
+    return `  ('${r.id}', '${assessmentId}', '${r.code}', ${nameSql}, '${r.departmentId}', '${r.level}', '${r.tenure}', ${startedAt}, ${submittedAt}, NOW(), NOW())`
+  })
+  out.push(`INSERT INTO "Respondent" ("id", "assessmentId", "code", "name", "departmentId", "level", "tenure", "startedAt", "submittedAt", "createdAt", "updatedAt") VALUES`)
+  out.push(respondentRows.join(',\n') + ';')
+  out.push(``)
+
+  // --- Responses ---
+  out.push(`-- Responses`)
+  out.push(`-- Submitted respondents have all 30 answers; respondent #4 (Drew V.) has the first 28 answers (in-progress).`)
+  const responseRows = []
+  respondents.forEach((r, i) => {
+    if (r.submit) {
+      QUESTION_IDS.forEach((qid, qi) => {
+        responseRows.push(`  ('${randomUUID()}', '${r.id}', '${qid}', ${answerFor(i, qi)}, NOW(), NOW())`)
+      })
+    } else if (i === 3) {
+      QUESTION_IDS.slice(0, 14).forEach((qid, qi) => {
+        responseRows.push(`  ('${randomUUID()}', '${r.id}', '${qid}', ${answerFor(i, qi)}, NOW(), NOW())`)
+      })
+    }
+  })
+  out.push(`INSERT INTO "Response" ("id", "respondentId", "questionId", "value", "createdAt", "updatedAt") VALUES`)
+  out.push(responseRows.join(',\n') + ';')
+  out.push(``)
+
+  out.push(`COMMIT;`)
+  out.push(``)
+  out.push(`-- ────────────────────────────────────────────────────────────────`)
+  out.push(`-- Done.`)
+  out.push(`--`)
+  out.push(`-- Sample super admin login (set via SEED_SUPER_ADMIN_* in seed.ts):`)
+  out.push(`--   email:    ${SUPER_ADMIN_EMAIL}`)
+  out.push(`--   password: ${SUPER_ADMIN_PASSWORD}`)
+  out.push(`--`)
+  out.push(`-- Reminder: change SEED_SUPER_ADMIN_PASSWORD in .env.local before any non-local use.`)
+  out.push(`-- ────────────────────────────────────────────────────────────────`)
+
+  console.log(out.join('\n'))
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
