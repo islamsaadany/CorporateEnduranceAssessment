@@ -8,6 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx prisma/seed.ts",
+    "db:push": "prisma db push",
+    "db:setup": "prisma db push && tsx prisma/seed.ts",
+    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate",
     "postinstall": "prisma generate"
   },
   "dependencies": {

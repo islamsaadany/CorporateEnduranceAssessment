@@ -53,24 +53,45 @@ Fill in:
 
 There is **no** `RESEND_API_KEY` and **no** `ADMIN_KEY`. Admin auth is full NextAuth email/password.
 
-### 3. Push schema to the database
+### 3. Set up the database
+**First time** (push schema + seed sample data):
 ```bash
-npx prisma db push
+npm run db:setup
 ```
 
-### 4. Seed
-Creates one super admin, one Settings singleton, and one sample assessment with 5 respondents (3 submitted → enough to satisfy the ≥3 anonymity guardrail).
-
+**After a schema change** (the Claude session will tell you when to run this):
 ```bash
-npm run seed
+npm run db:push
 ```
 
-### 5. Run
+**Wipe + reseed** (destroys all data — use only on dev DBs):
+```bash
+npm run db:reset
+```
+
+The seed creates: 1 super admin (creds from `SEED_SUPER_ADMIN_*` env vars), 1 `Settings` singleton, and 1 sample assessment with 5 respondents (3 submitted → enough to satisfy the ≥3 anonymity guardrail).
+
+### 4. Run the app
 ```bash
 npm run dev
 ```
 
 The landing page is at http://localhost:3000.
+
+---
+
+## DB workflow with Claude sessions
+
+Claude Code sessions running here **do not have access to your `DATABASE_URL`** and cannot push schema changes themselves. Whenever a session edits `prisma/schema.prisma`, it will ask you to run **one** of:
+
+| When | Command |
+|------|---------|
+| Schema changed; preserve existing data | `npm run db:push` |
+| Schema changed; want fresh seed data | `npm run db:reset` |
+| Just need to re-seed (no schema change) | `npm run seed` |
+| Want to inspect rows | `npm run db:studio` |
+
+These are the only DB commands you'll need. Copy and paste.
 
 ---
 
@@ -80,7 +101,6 @@ The landing page is at http://localhost:3000.
 npm run build        # full production build (requires DATABASE_URL)
 npm run lint         # ESLint
 npx tsc --noEmit     # TypeScript only (no DB needed)
-npx prisma studio    # DB GUI
 ```
 
 ---

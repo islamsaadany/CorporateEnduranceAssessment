@@ -248,13 +248,17 @@ Database credentials are stored in `.env.local` (gitignored) for security.
 - OpenAI: https://platform.openai.com/api-keys
 - Claude: https://console.anthropic.com/settings/keys
 
-**Usage:** Claude Code can run database operations:
-```bash
-npx prisma db push         # Sync schema to database
-npx prisma migrate deploy  # Run migrations (production)
-npx prisma studio          # Open database GUI
-npx prisma generate        # Regenerate Prisma client (also runs on postinstall)
-```
+**Usage:** Claude Code sessions **do not** have `DATABASE_URL` and **cannot** push schema changes themselves. Whenever you edit `prisma/schema.prisma` (or any other change that requires a DB operation), tell the user exactly which `npm run` command to copy:
+
+| When | Command for the user to run |
+|------|-----------------------------|
+| Schema changed; preserve existing data | `npm run db:push` |
+| Schema changed; want fresh seed data | `npm run db:reset` *(destructive — confirm with user first)* |
+| Just need to re-seed (no schema change) | `npm run seed` |
+| Want to inspect rows | `npm run db:studio` |
+| Regenerate Prisma client only | `npm run db:generate` |
+
+**Never** attempt `npx prisma db push` yourself — it will fail without credentials. **Never** suggest the user do it differently — these `npm run db:*` scripts are the canonical surface (defined in `package.json`).
 
 ### Build Commands
 ```bash
