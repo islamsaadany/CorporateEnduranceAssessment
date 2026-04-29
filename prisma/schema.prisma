@@ -1,0 +1,179 @@
+// Prisma schema for The Endurance Assessment.
+// Mirrors the schema documented in PROJECT_DETAILS.md.
+// Source-of-truth for data shape; product behavior lives in product-spec/.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  admin
+  super_admin
+}
+
+enum AssessmentStatus {
+  collecting
+  closed
+}
+
+enum Level {
+  executive
+  senior_leader
+  manager
+  team_lead
+  individual_contributor
+}
+
+enum TenureBand {
+  lt_1y
+  y1_3
+  y4_7
+  y8_15
+  gt_15y
+}
+
+enum AiProvider {
+  gemini
+  claude
+  openai
+}
+
+// ─── Models ───────────────────────────────────────────────────────────
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(admin)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdAssessments Assessment[]      @relation("CreatedBy")
+  auditEntries       AuditLog[]
+  generatedReports   GeneratedReport[]
+
+  @@index([role])
+}
+
+model Assessment {
+  id          String           @id @default(uuid())
+  clientName  String
+  status      AssessmentStatus @default(collecting)
+  deadline    DateTime
+  closedAt    DateTime?
+  createdById String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  createdBy        Admin             @relation("CreatedBy", fields: [createdById], references: [id])
+  departments      Department[]
+  respondents      Respondent[]
+  generatedReports GeneratedReport[]
+  auditEntries     AuditLog[]
+
+  @@index([status, deadline])
+  @@index([createdById])
+}
+
+model Department {
+  id           String   @id @default(uuid())
+  assessmentId String
+  name         String
+  createdAt    DateTime @default(now())
+
+  assessment  Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  respondents Respondent[]
+
+  @@unique([assessmentId, name])
+}
+
+model Respondent {
+  id           String      @id @default(uuid())
+  assessmentId String
+  code         String      @unique
+  name         String?
+  departmentId String?
+  level        Level?
+  tenure       TenureBand?
+  startedAt    DateTime?
+  submittedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  assessment Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+  responses  Response[]
+
+  @@index([assessmentId])
+  @@index([departmentId])
+}
+
+model Response {
+  id           String   @id @default(uuid())
+  respondentId String
+  questionId   String
+  value        Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  respondent Respondent @relation(fields: [respondentId], references: [id], onDelete: Cascade)
+
+  @@unique([respondentId, questionId])
+  @@index([questionId])
+}
+
+// Single-row table; id defaults to "singleton" by convention.
+model Settings {
+  id                    String     @id @default("singleton")
+  aiProvider            AiProvider @default(gemini)
+  encryptedApiKeyGemini Bytes?
+  encryptedApiKeyClaude Bytes?
+  encryptedApiKeyOpenai Bytes?
+  promptVersion         Int        @default(1)
+  updatedById           String?
+  updatedAt             DateTime   @updatedAt
+}
+
+model GeneratedReport {
+  id              String     @id @default(uuid())
+  assessmentId    String
+  filterSignature String
+  isDraft         Boolean
+  promptVersion   Int
+  provider        AiProvider
+  inputJson       Json
+  outputJson      Json
+  generatedById   String
+  generatedAt     DateTime   @default(now())
+
+  assessment  Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  generatedBy Admin      @relation(fields: [generatedById], references: [id])
+
+  @@unique([assessmentId, filterSignature])
+  @@index([assessmentId, generatedAt])
+}
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  assessmentId      String?
+  actorAdminId      String?
+  actorRespondentId String?
+  action            String
+  metadata          Json
+  createdAt         DateTime @default(now())
+
+  assessment Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  actorAdmin Admin?      @relation(fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([assessmentId, createdAt])
+  @@index([actorAdminId, createdAt])
+}

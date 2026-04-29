@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 0 — Documentation **(complete)** → ready for Phase 1
+**Current phase:** Phase 1 — Foundation **(scaffold landed)**
 **Last updated:** 2026-04-29
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -19,7 +19,9 @@
 
 The `(1)` / `(5)` upload duplicates have been removed.
 
-**Awaiting:** User review of the rewritten root docs before moving to Phase 1 (Next.js scaffold + Prisma schema).
+**In progress:** Phase 1 scaffold landed — Next.js 16 + Tailwind config, Prisma schema (8 tables matching `PROJECT_DETAILS.md`), `src/lib/prisma.ts`, shared `types.ts` + `constants.ts`, minimal `app/layout.tsx` + landing page, `prisma/seed.ts` (super admin + sample assessment with 5 respondents, 3 submitted), `.env.example`, `.gitignore`, README setup section.
+
+**Awaiting:** User to run `npm install`, `npx prisma db push`, `npm run seed`, `npm run dev` against their Neon DB to verify the scaffold boots and the seed data is present. Once confirmed, Phase 2 (admin auth + dashboard) begins.
 
 ---
 
@@ -36,10 +38,10 @@ The `(1)` / `(5)` upload duplicates have been removed.
 - [x] Original `ENDURANCE_ASSESSMENT_SPEC.md` replaced with index
 
 ### Phase 1 — Foundation
-- [ ] Next.js 16 + Tailwind project scaffold
-- [ ] Prisma schema (admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports)
-- [ ] Neon DB connected, schema pushed
-- [ ] Seed script: super admin + sample assessment
+- [x] Next.js 16 + Tailwind project scaffold
+- [x] Prisma schema (admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports)
+- [ ] Neon DB connected, schema pushed *(awaits user — needs DATABASE_URL credentials)*
+- [x] Seed script: super admin + sample assessment
 
 ### Phase 2 — Admin auth + dashboard
 - [ ] NextAuth email/password
@@ -117,6 +119,12 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 | Date | Phase | Change |
 |------|-------|--------|
+| 2026-04-29 | 1 | Phase 1 scaffold landed: package.json (Next 16 / React 19 / Prisma 5 / NextAuth v5 / Tailwind 3), tsconfig, next.config.mjs, tailwind.config.ts, postcss.config.mjs, .eslintrc, .gitignore, .env.example. |
+| 2026-04-29 | 1 | Prisma schema written for 8 tables (`Admin`, `Assessment`, `Department`, `Respondent`, `Response`, `Settings`, `GeneratedReport`, `AuditLog`) plus 5 enums. Mirrors `PROJECT_DETAILS.md`. |
+| 2026-04-29 | 1 | `src/lib/prisma.ts`, `src/data/types.ts`, `src/data/constants.ts` (pillar/capability/band/level/tenure metadata, ≥3 guardrail constant). |
+| 2026-04-29 | 1 | App skeleton: `src/app/layout.tsx`, `globals.css`, minimal landing `page.tsx` with "I have an access code" + "Admin login" CTAs. |
+| 2026-04-29 | 1 | `prisma/seed.ts`: 1 super admin + Settings singleton + 1 sample assessment with 2 departments and 5 respondents (3 submitted → satisfies ≥3 guardrail). |
+| 2026-04-29 | 1 | README rewritten with full local setup instructions. |
 | 2026-04-29 | 0 | `ENDURANCE_ASSESSMENT_SPEC.md` replaced with 53-line index pointing at `product-spec/`. `(1)`/`(5)` upload duplicates removed. **Phase 0 complete.** |
 | 2026-04-29 | 0 | `REUSABLE_PATTERNS.md` updated with per-pattern applicability table for The Endurance Assessment. |
 | 2026-04-29 | 0 | `PROJECT_DETAILS.md` rewritten: 8-table Prisma schema, API routes, module shapes, cache invalidation flow, cross-refs to `product-spec/`. |
