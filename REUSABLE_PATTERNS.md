@@ -1,11 +1,14 @@
 # Reusable Patterns & Bootstrap Guide
 
 > A portable catalog of the building blocks behind Strategic Thinking Profile, abstracted from its specific assessment content. Use this to start a new diagnostic / scored-questionnaire / report-generating app from the same skeleton.
+>
+> **This copy lives in the Endurance Assessment repo.** See the [Applicability to The Endurance Assessment](#applicability-to-the-endurance-assessment) section below for a per-pattern note on what carries over, what changes, and what to drop entirely for this product.
 
 ---
 
 ## Table of Contents
 
+0. [Applicability to The Endurance Assessment](#applicability-to-the-endurance-assessment) *(this project)*
 1. [What's reusable here (and what isn't)](#whats-reusable-here-and-what-isnt)
 2. [Bootstrapping a new project](#bootstrapping-a-new-project)
 3. [Theme system (dual-mode, token-based, no Tailwind)](#1-theme-system)
@@ -23,6 +26,45 @@
 15. [Public shareable per-session report](#13-public-shareable-report)
 16. [Refresh protection via localStorage](#14-refresh-protection)
 17. [Smaller patterns](#15-smaller-patterns)
+
+---
+
+## Applicability to The Endurance Assessment
+
+This patterns catalog was extracted from the Strategic Thinking Profile (an **individual** scored assessment with archetypes and per-session AI narrative). The Endurance Assessment is **organizational**, **anonymous-in-aggregate**, **deadline-driven**, and uses **multi-variant filtered reports** with provider-abstracted AI. Several patterns carry over unchanged, several need reshaping, and a few should not be carried over at all.
+
+Use this table when reaching for a pattern. Match the pattern to the product, not the other way around.
+
+| # | Pattern | Status here | Note |
+|---|---------|-------------|------|
+| 1 | Theme system (inline tokens, no Tailwind) | **Drop** | This project uses **Tailwind CSS** by decision (see `Plan & Progress/execution-plan.md`). Keep the *idea* of design tokens (centralized colors/spacing) but express them as Tailwind theme extensions, not the THEMES object pattern below. |
+| 2 | Three-tier content model (raw / interpretation / guidance) | **Partial** | We have **only Tier 1** (questions + scoring) plus the AI-generated narrative. Bands are simple thresholds (no Tier 2 description editing). No archetypes → no Tier 2 archetype rows. No per-tier "leverage" / "action plan" content tables → action items come from the LLM. |
+| 3 | Server-side scoring (anti-leak) | **Apply** | Carry over the principle: aggregate on the server, never ship raw individual answers to the client unless the admin opens the "Anonymized Individuals" view (which is gated by ≥3 respondents and audit-logged). See `src/lib/scoring.ts` in `PROJECT_DETAILS.md`. |
+| 4 | Role-adjusted thresholds | **Drop** | Bands are uniform (Critical Gap / Needs Work / Solid / Strong) across all levels. The "Level" demographic is used for **filtering**, not for adjusting thresholds. |
+| 5 | Archetype / classification engine | **Drop** | No archetypes in this product. The equivalent narrative output is the AI executive summary + focus-area action items. |
+| 6 | AI narrative with DB cache + retry + validator | **Apply (reshaped)** | Cache is **per `(assessmentId, filterSignature)`**, not per session. Multiple cached entries per assessment (one per filter). Validator should accept the new JSON shape (`executiveSummary`, `focusAreaActions[]`). Add: provider abstraction so the same code paths work for Gemini / Claude / OpenAI. See `src/lib/ai/`. |
+| 7 | Tabbed guided flow (sequential unlock) | **Drop** | Respondent flow is Typeform-style (one question per screen, linear). Admin results page uses normal tabs (no sequential unlock). |
+| 8 | Sticky tab bar + floating key (IntersectionObserver) | **Optional** | Useful on the long admin results page; lift directly if/when needed. Not required for v1. |
+| 9 | Access-code gating system | **Apply (reshaped)** | One code = **one respondent**, not a cohort code. 6-char alphanumeric, alphabet excludes `0/O/1/I/L`. Codes are distributed manually (no email). See `src/lib/codes.ts`. |
+| 10 | PDF generation + email delivery | **Partial** | PDF: keep — React-PDF template, page-break rules, filter summary header. Email: **drop entirely.** No Resend dependency, no email templates. |
+| 11 | Admin panel skeleton (auth-by-key) | **Drop the auth shape** | NextAuth credentials provider replaces single-key auth. Two roles: `admin` and `super_admin` (with super-admin-only routes for `/settings/ai` and `/admins`). The sortable/filterable table primitives are still useful — keep those. |
+| 12 | Team / cohort aggregation | **Apply (reshaped)** | This is the *core* of this product, not an add-on. Aggregation runs in `src/lib/scoring.ts` and respects the active filter. There is no "individual report" mode — aggregation is the only mode. |
+| 13 | Public shareable per-session report | **Drop** | Respondents do not see results. Only authenticated admins access reports. No public share links. |
+| 14 | Refresh protection via localStorage | **Apply (reshaped)** | Used during the respondent flow only (`localStorage["tea_progress_<respondentId>"]` keeps question index + in-progress answers). Cleared on submit. The admin results page is server-rendered; no localStorage protection needed there. |
+| 15 | Smaller patterns | **Apply selectively** | Most are still useful (Prisma client singleton, `genUUID`, hooks for outside-click, etc.). Skip anything keyed to the dropped patterns above. |
+
+**Also dropped from the reference project:**
+- Forefront's **Strategic Thinking** brand palette / Playfair Display heading font are not the source of truth here. Visual design language for The Endurance Assessment lives in `product-spec/12_design_language.md`.
+- The 15-scenario bank, 16-archetype taxonomy, role-adjusted thresholds, Profile Dynamics prompt, action-plan/leverage copy, and integration insights are all **content** belonging to the other product.
+
+**Also new for this project (not in the reference patterns):**
+- **Provider abstraction for AI** (Gemini / Claude / OpenAI behind one interface) — see `src/lib/ai/index.ts`.
+- **AES-256 encryption of admin-supplied API keys at rest** — see `src/lib/crypto.ts`.
+- **Hourly Vercel Cron closure check** flipping `collecting → closed` past deadline.
+- **Filter signature** as a canonical cache key, used for both DB lookups and PDF filenames.
+- **≥3-respondent anonymity guardrail** enforced at the filter layer.
+
+When in doubt, the rule is: **if a pattern below contradicts a decision in `Plan & Progress/execution-plan.md`, the decisions log wins.** Update this table if a new pattern is introduced or a current one is reshaped during the build.
 
 ---
 
