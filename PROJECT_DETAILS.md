@@ -28,7 +28,7 @@
 | Auth (respondent) | 6-character access code (no app account) |
 | AI | Provider-abstracted: Gemini (default) / Claude / OpenAI. Admin selects in panel; model name hardcoded per provider |
 | PDF | `@react-pdf/renderer` (server-side) |
-| Scheduled jobs | Vercel Cron (hourly closure check) |
+| Scheduled jobs | Vercel Cron (daily closure check at 00:00 UTC — Hobby plan caps at daily crons) |
 | Encryption | AES-256-GCM for API keys at rest, master key in `SETTINGS_ENCRYPTION_KEY` env var |
 | Hosting | Vercel |
 | Email | **None** |

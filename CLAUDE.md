@@ -134,7 +134,7 @@ The product is **organizational** (not individual), **anonymous in aggregate** (
 - **AI:** Provider-abstracted — Gemini (default) / Claude / OpenAI. Admin selects provider + supplies API key in admin panel; model name hardcoded per provider. Bootstrap fallback via env var with banner.
 - **PDF:** `@react-pdf/renderer` (server-side rendering)
 - **Styling:** **Tailwind CSS** (chosen over inline themes from the reference project for speed)
-- **Scheduled jobs:** Vercel Cron (hourly closure check)
+- **Scheduled jobs:** Vercel Cron (daily closure check at 00:00 UTC — Hobby plan limit; manual "Close now" available for sub-day closure)
 - **Encryption:** AES-256 for API keys at rest, master key in env var
 - **Email:** **None.** No invitation, no reminder, no closure notification. Codes distributed manually by the admin.
 - **Deployment:** Vercel

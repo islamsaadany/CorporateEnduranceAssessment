@@ -73,7 +73,7 @@ Each entry: date, area, decision, why.
 | Auth (respondent) | 6-char access code (no app account) |
 | AI provider abstraction | Gemini default · Claude · OpenAI — selectable in admin panel |
 | PDF | `@react-pdf/renderer` (server-side) |
-| Scheduled jobs | Vercel Cron (hourly closure check) |
+| Scheduled jobs | Vercel Cron (daily closure check at 00:00 UTC — Hobby plan caps at daily crons) |
 | Hosting | Vercel |
 | Encryption (API keys at rest) | AES-256, master key in env var |
 | Email | **None** |
