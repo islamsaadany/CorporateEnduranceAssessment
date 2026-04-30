@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 3 — Assessment lifecycle (admin side) **(landed; awaits live Vercel verification)**
+**Current phase:** Phase 4 — Respondent flow **(landed; awaits live Vercel verification)**
 **Last updated:** 2026-04-29
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -60,12 +60,13 @@ The `(1)` / `(5)` upload duplicates have been removed.
 - [ ] Live Vercel verification: create a new assessment → land on detail page → see N codes → copy one → counts (not started / in progress / submitted) match seeded data *(awaits user)*
 
 ### Phase 4 — Respondent flow (happy path)
-- [ ] `/take` code entry
-- [ ] `/take/welcome` with privacy disclosure
-- [ ] `/take/demographics` (department / level / tenure / optional name)
-- [ ] `/take/question/[1..30]` Typeform-style flow
-- [ ] `/take/review` and `/take/done`
-- [ ] localStorage progress persistence + server-side answer save
+- [x] `/take` code entry
+- [x] `/take/welcome` with privacy disclosure
+- [x] `/take/demographics` (department / level / tenure / optional name)
+- [x] `/take/question/[1..30]` Typeform-style flow
+- [x] `/take/review` and `/take/done`
+- [x] localStorage progress persistence + server-side answer save
+- [ ] Live Vercel verification: enter cohort code → welcome → demographics → 30 questions (try 1–4 + "I don't know") → review → submit → see "Submitted" → admin dashboard reflects new submitted respondent *(awaits user)*
 
 ### Phase 5 — Closure cron + status logic
 - [ ] Hourly Vercel Cron flips status when deadline passes
