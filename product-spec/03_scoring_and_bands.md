@@ -215,7 +215,7 @@ Used for testing the results page. Five respondents (A–E) who each rated all 3
 | E | 2.80 | 3.90 | 2.50 | 3.07 |
 
 ### Team pillar and overall means
-- **Agility:** 2.58 (Needs Work) — mean of individual Agility scores
+- **Agility:** 2.58 (Solid) — mean of individual Agility scores
 - **Toughness:** 3.82 (Strong) — mean of individual Toughness scores
 - **Resilience:** 2.46 (Needs Work) — mean of individual Resilience scores
 - **Overall:** 2.95 (Solid) — mean of individual Overall scores

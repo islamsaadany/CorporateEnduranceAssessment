@@ -80,11 +80,17 @@ What's built and live on Vercel:
 - [x] Live verified
 
 ### Phase 6 — Numerical report (live)
-- [ ] `/admin/assessments/[id]/results` with all 4 sections
-- [ ] "Preliminary — N of M" banner during collection
-- [ ] ≥3 respondent guardrail
-- [ ] Filter UI (department / level / tenure / compound)
-- [ ] Comparison view (two-filter side-by-side, quantitative only)
+**Slicing:** 6.1 aggregation engine + JSON API → 6.2 results page → 6.3 filter UI → 6.4 comparison view. Each slice gates on `npx tsc --noEmit` + `npm run build`.
+
+- [x] **6.1** — Aggregation engine + results JSON API
+  - [x] Multi-value `ParsedFilter` (departments / levels / tenures); extended `AggregatedResults` with `ratedCount` + `insufficient` per capability and per-pillar `PillarResult`
+  - [x] `src/lib/filters.ts` — URL parse, canonical query-string signature (`dept=A,B&level=manager`, sorted), human-readable description, Prisma `where` fragment
+  - [x] `src/lib/scoring.ts` — pure aggregation; per-respondent → team math per `03_scoring_and_bands.md` § 2/§ 3 (team overall = mean of individual overalls); top-5 focus areas with spread-desc → alphabetical tie-break
+  - [x] `GET /api/assessments/[id]/results` — submitted-only respondents, ≥3 floor lock, anonymized respondent rows
+  - [x] Sanity-checked against the worked example in `03_scoring_and_bands.md` § 8: Overall 2.95, Agility 2.58, Toughness 3.82, Resilience 2.46, focus areas in spec rank order
+- [ ] **6.2** — Results page (Summary / Capability Profile / Focus Areas / Anonymized Individuals); "Preliminary — N of M" banner; lock card at <3
+- [ ] **6.3** — Filter UI (department / level / tenure / compound); URL-state; live "matches N respondents" preview
+- [ ] **6.4** — Comparison view (two-filter side-by-side, quantitative only); both sides independently floor-checked
 
 ### Phase 7 — AI integration
 - [ ] Settings table with AES-256 encrypted API keys
