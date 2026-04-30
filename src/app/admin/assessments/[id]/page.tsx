@@ -63,6 +63,12 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/assessments/${assessment.id}/results`}
+              className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-canvas transition hover:bg-ink/90"
+            >
+              View report
+            </Link>
             {assessment.status === 'collecting' ? (
               <CloseButton assessmentId={assessment.id} />
             ) : null}

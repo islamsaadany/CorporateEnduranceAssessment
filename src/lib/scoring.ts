@@ -192,6 +192,8 @@ function capabilityResult(vals: number[]): CapabilityResult {
     return {
       score: null,
       spread: null,
+      min: null,
+      max: null,
       ratedCount: 0,
       insufficient: true,
       band: null,
@@ -202,16 +204,21 @@ function capabilityResult(vals: number[]): CapabilityResult {
     return {
       score: null,
       spread: null,
+      min: null,
+      max: null,
       ratedCount: vals.length,
       insufficient: true,
       band: null,
     }
   }
   const score = mean(vals)
-  const spread = Math.max(...vals) - Math.min(...vals)
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
   return {
     score,
-    spread,
+    spread: max - min,
+    min,
+    max,
     ratedCount: vals.length,
     insufficient: false,
     band: bandFor(score),

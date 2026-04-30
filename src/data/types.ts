@@ -59,6 +59,11 @@ export interface ParsedFilter {
 export interface CapabilityResult {
   score: number | null
   spread: number | null
+  // min and max of the individual capability scores across respondents in
+  // the active filter. Used to render "Range: 1.5 – 3.5" per spec 05 § 4.1
+  // without forcing the UI to recompute. null when insufficient.
+  min: number | null
+  max: number | null
   ratedCount: number
   insufficient: boolean
   band: BandKey | null

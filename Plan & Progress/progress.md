@@ -88,7 +88,17 @@ What's built and live on Vercel:
   - [x] `src/lib/scoring.ts` — pure aggregation; per-respondent → team math per `03_scoring_and_bands.md` § 2/§ 3 (team overall = mean of individual overalls); top-5 focus areas with spread-desc → alphabetical tie-break
   - [x] `GET /api/assessments/[id]/results` — submitted-only respondents, ≥3 floor lock, anonymized respondent rows
   - [x] Sanity-checked against the worked example in `03_scoring_and_bands.md` § 8: Overall 2.95, Agility 2.58, Toughness 3.82, Resilience 2.46, focus areas in spec rank order
-- [ ] **6.2** — Results page (Summary / Capability Profile / Focus Areas / Anonymized Individuals); "Preliminary — N of M" banner; lock card at <3
+- [x] **6.2** — Results page server-rendered at `/admin/assessments/[id]/results` (no filter UI yet)
+  - [x] `src/lib/results-service.ts` — single source of truth used by both the page and the API route
+  - [x] Section 1 hero (overall score + 3 pillar breakdown + band legend, dark-blue panel + ochre eyebrow)
+  - [x] Section 2 Capability Profile (3 columns × 5 rows, sorted strongest-first per pillar; "Insufficient data" + spread/range when >1.0; "Team is split" badge when spread >1.5)
+  - [x] Section 3 Focus Areas (top-5 ranked cards with baseline action items from `04_recommendations.md` § 3 — `BASELINE_ACTION_ITEMS` in `src/data/constants.ts`)
+  - [x] Section 4 Individual Responses (table + capability heatmap; **names shown directly in v1** — anonymization with letter labels + reveal toggle deferred to a later phase by user direction; filed for follow-up)
+  - [x] Banner stack: filter banner + Preliminary banner during collection (Draft AI banner lands in Phase 7)
+  - [x] Lock card with three messages (no respondents / below floor / filter mismatch); applies to company-wide and filter views
+  - [x] Spec/code drift caught + fixed: `CapabilityResult` extended with `min`/`max` so the report can render "Range: 1.5 – 3.5" per spec 05 § 4.1 instead of just spread
+  - [x] Tailwind config extended with brand palette per spec 12 § 1 (`brand-dark-blue`, `brand-ochre`, etc) + Georgia serif font; existing `ink/canvas/band` tokens kept intact for other admin pages
+  - [x] "View report" link added to assessment detail page
 - [ ] **6.3** — Filter UI (department / level / tenure / compound); URL-state; live "matches N respondents" preview
 - [ ] **6.4** — Comparison view (two-filter side-by-side, quantitative only); both sides independently floor-checked
 
