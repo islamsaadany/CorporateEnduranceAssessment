@@ -33,7 +33,7 @@ A canonical, sorted query string built from the active filter:
 filter_signature = canonical_query_string({
   dept:   sorted(["Engineering", "Sales"]),
   level:  sorted(["manager"]),
-  tenure: sorted(["y4_7", "y8_15"])
+  tenure: sorted(["y4_7", "y8_15"])  // canonical Prisma enum values
 })
 ```
 
@@ -49,7 +49,7 @@ Rules:
 - Multiple values within a dimension are joined with `,`.
 - A dimension with no values is **omitted** from the string entirely (it does not appear as `dept=`).
 - Level values use the canonical enum form (`individual_contributor`, `team_leader`, `manager`, `senior_leader`).
-- Tenure values use the canonical enum form (`y_lt1`, `y1_3`, `y4_7`, `y8_15`, `y15_plus`).
+- Tenure values use the canonical enum form (`lt_1y`, `y1_3`, `y4_7`, `y8_15`, `gt_15y`) — these match the Prisma `TenureBand` enum exactly so URL values can be passed through to the DB without translation.
 - Department values use the admin-entered name verbatim (URL-encoded).
 
 ### 2.2 Special signatures
