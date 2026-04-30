@@ -15,9 +15,9 @@ Collected on `/take/demographics` after code validation, before question 1.
 
 | Field | Required? | Type | Values |
 |-------|-----------|------|--------|
-| **Full name** | Optional | Text input | Free-text, max ~200 chars |
+| **Full name** | Required | Text input | Free-text, max ~120 chars |
 | **Department** | Required | Dropdown | Admin-defined per assessment (see section 2) |
-| **Level** | Required | Dropdown | Fixed list of 5 (see section 3) |
+| **Level** | Required | Dropdown | Fixed list of 4 (see section 3) |
 | **Years at the organization** (tenure) | Required | Dropdown | Fixed banded list of 5 (see section 4) |
 
 No other demographics are collected in v1. Specifically excluded:
@@ -58,25 +58,26 @@ Stored in a `departments` table linked to the assessment, with a unique constrai
 
 ## 3. Level
 
-### 3.1 Fixed list (canonical order)
+### 3.1 Fixed list (canonical order — least-senior to most-senior)
 
-1. **Executive** — C-suite, board members, top-of-house roles
-2. **Senior Leader** — VP, SVP, divisional heads, senior directors
-3. **Manager** — Department managers, team managers, mid-level leaders
-4. **Team Lead** — First-line leaders, supervisors, team coordinators
-5. **Individual Contributor** — IC roles without direct reports
+The list collapses adjacent tiers from the original 5-tier taxonomy into 4 merged labels. The merged labels are the canonical reference used in pilot research; they avoid forcing respondents to draw fine distinctions (e.g., "VP" vs. "SVP") that don't change the analysis.
+
+1. **Individual Contributor / Early Career** — IC roles, junior individual contributors, first-job-out roles
+2. **Team Leader / Supervisor** — First-line leaders, team coordinators, supervisors
+3. **Manager / Department Head** — Department managers, mid-level leaders, single-team or single-function managers
+4. **Senior Leader / Executive** — VP, SVP, divisional heads, senior directors, C-suite, board members
 
 ### 3.2 Why fixed
 
-Cross-assessment comparability. If different clients used different level taxonomies, benchmarking and comparison across engagements would be impossible. The 5 chosen represent the standard organizational tier model.
+Cross-assessment comparability. If different clients used different level taxonomies, benchmarking and comparison across engagements would be impossible. These 4 represent the standard organizational tier model with adjacent ranks merged.
 
 ### 3.3 Storage
 
-Stored as an enum string on `respondents.level`. Validated server-side against the enum.
+Stored as an enum string on `respondents.level`. Validated server-side against the enum. Internal keys: `individual_contributor`, `team_leader`, `manager`, `senior_leader`. Display labels are the slash-joined merged names above.
 
 ### 3.4 Display
 
-In dropdown and report UI, displayed exactly as the canonical names. No abbreviations ("IC" is not used — always "Individual Contributor").
+In dropdown and report UI, displayed exactly as the canonical merged names. No abbreviations.
 
 ---
 

@@ -1,0 +1,206 @@
+// Prisma schema for The Endurance Assessment.
+// Mirrors the schema documented in PROJECT_DETAILS.md.
+// Source-of-truth for data shape; product behavior lives in product-spec/.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // POSTGRES_URL: pooled connection (used for runtime queries on Vercel).
+  // DATABASE_URL_UNPOOLED: direct connection (used for migrations and
+  //   `prisma db push`). Both names match Vercel's Neon integration.
+  url       = env("POSTGRES_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  admin
+  super_admin
+}
+
+enum AssessmentStatus {
+  collecting
+  closed
+}
+
+enum Level {
+  // 4 merged tiers — see product-spec/09_demographics.md.
+  individual_contributor // "Individual Contributor / Early Career"
+  team_leader            // "Team Leader / Supervisor"
+  manager                // "Manager / Department Head"
+  senior_leader          // "Senior Leader / Executive"
+}
+
+enum TenureBand {
+  lt_1y
+  y1_3
+  y4_7
+  y8_15
+  gt_15y
+}
+
+enum AiProvider {
+  gemini
+  claude
+  openai
+}
+
+// ─── Models ───────────────────────────────────────────────────────────
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(admin)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdAssessments Assessment[]      @relation("CreatedBy")
+  auditEntries       AuditLog[]
+  generatedReports   GeneratedReport[]
+
+  @@index([role])
+}
+
+model Assessment {
+  id          String           @id @default(uuid())
+  clientName  String
+  // Cohort code: one code per assessment, shared by every respondent.
+  // 6 chars over an alphabet that excludes 0/O/1/I/L. Stored uppercased.
+  code        String           @unique
+  // Hard cap on the number of respondent rows that can be created via
+  // code validation. Set explicitly by the admin at creation; only
+  // changes when the admin edits it (does not auto-grow).
+  maxUses     Int
+  status      AssessmentStatus @default(collecting)
+  deadline    DateTime
+  closedAt    DateTime?
+  createdById String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  createdBy        Admin             @relation("CreatedBy", fields: [createdById], references: [id])
+  departments      Department[]
+  respondents      Respondent[]
+  generatedReports GeneratedReport[]
+  auditEntries     AuditLog[]
+
+  @@index([status, deadline])
+  @@index([createdById])
+}
+
+model Department {
+  id           String   @id @default(uuid())
+  assessmentId String
+  name         String
+  createdAt    DateTime @default(now())
+
+  assessment  Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  respondents Respondent[]
+
+  @@unique([assessmentId, name])
+}
+
+model Respondent {
+  id           String      @id @default(uuid())
+  assessmentId String
+  // Per-respondent code is gone — see decisions log reversal 2026-04-29.
+  // Identity comes from the (id, browser localStorage) pairing during the
+  // respondent flow. The cohort code lives on Assessment.
+  //
+  // Name is collected as part of demographics. The DB column stays
+  // nullable because (a) a respondent row exists between code-validation
+  // and demographics-save, and (b) older sample data may have NULLs.
+  // The API enforces non-empty name when demographics are saved.
+  name         String?
+  departmentId String?
+  level        Level?
+  tenure       TenureBand?
+  // Set when the respondent saves demographics. Used to distinguish
+  // "real" respondents (demographics-completed) from ghost rows
+  // (validated-then-bounced). Cap checks + admin UI filter on this.
+  demographicsCompletedAt DateTime?
+  startedAt    DateTime?
+  submittedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  assessment Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+  responses  Response[]
+
+  @@index([assessmentId])
+  @@index([departmentId])
+  @@index([assessmentId, submittedAt])
+  @@index([assessmentId, demographicsCompletedAt])
+}
+
+model Response {
+  id           String   @id @default(uuid())
+  respondentId String
+  questionId   String
+  // 1..4 if rated, NULL if respondent picked "I don't know".
+  // Row existence = answered. NULL value = explicit non-answer (still
+  // counts toward submission completeness, but excluded from scoring).
+  value        Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  respondent Respondent @relation(fields: [respondentId], references: [id], onDelete: Cascade)
+
+  @@unique([respondentId, questionId])
+  @@index([questionId])
+}
+
+// Single-row table; id defaults to "singleton" by convention.
+model Settings {
+  id                    String     @id @default("singleton")
+  aiProvider            AiProvider @default(gemini)
+  encryptedApiKeyGemini Bytes?
+  encryptedApiKeyClaude Bytes?
+  encryptedApiKeyOpenai Bytes?
+  promptVersion         Int        @default(1)
+  updatedById           String?
+  updatedAt             DateTime   @updatedAt
+}
+
+model GeneratedReport {
+  id              String     @id @default(uuid())
+  assessmentId    String
+  filterSignature String
+  isDraft         Boolean
+  promptVersion   Int
+  provider        AiProvider
+  inputJson       Json
+  outputJson      Json
+  generatedById   String
+  generatedAt     DateTime   @default(now())
+
+  assessment  Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  generatedBy Admin      @relation(fields: [generatedById], references: [id])
+
+  @@unique([assessmentId, filterSignature])
+  @@index([assessmentId, generatedAt])
+}
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  assessmentId      String?
+  actorAdminId      String?
+  actorRespondentId String?
+  action            String
+  metadata          Json
+  createdAt         DateTime @default(now())
+
+  assessment Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  actorAdmin Admin?      @relation(fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([assessmentId, createdAt])
+  @@index([actorAdminId, createdAt])
+}

@@ -106,19 +106,27 @@ Each question has the following fields:
 
 ---
 
-## 3. The 5-point Likert scale
+## 3. The 4-point Likert scale + "I don't know"
 
-Every question is rated on this scale. Whole numbers only — no fractional responses, no "N/A", no skip.
+Every question is rated on a 4-point scale. **There is deliberately no neutral midpoint** — the scale forces a lean toward "true" or "not true" of the organization. Respondents who genuinely lack information to answer pick **"I don't know"** instead.
 
 | Score | Label | Meaning |
 |-------|-------|---------|
 | **1** | Strongly Disagree | This is clearly not true of our organization. |
 | **2** | Disagree | This is only partly or occasionally true. |
-| **3** | Neutral | True in some areas, not in others. Mixed picture. |
-| **4** | Agree | Mostly true of our organization. |
-| **5** | Strongly Agree | Clearly and consistently true of our organization. |
+| **3** | Agree | Mostly true of our organization. |
+| **4** | Strongly Agree | Clearly and consistently true of our organization. |
+| — | **I don't know** | The respondent does not have visibility into this practice and cannot rate it honestly. |
 
-**All 30 questions must be answered to complete the assessment.** Respondents cannot submit a partial response.
+**All 30 questions must be answered to complete the assessment.** A valid answer is one of {1, 2, 3, 4, "I don't know"}. Respondents cannot leave a question blank.
+
+**Scoring effect of "I don't know":**
+- A capability score for one respondent is the mean of their **rated** answers (1–4) for that capability. "I don't know" answers are excluded from the mean.
+- If a respondent picked "I don't know" for both questions in a capability, that capability has no contribution from that respondent.
+- The aggregated capability score across respondents is the mean of every available rated answer (some respondents may not contribute to that capability at all — see `03_scoring_and_bands.md`).
+- "I don't know" answers do **not** affect the ≥3-respondent anonymity guardrail. A respondent who completed the assessment counts as one full respondent regardless of how many "I don't know"s they picked.
+
+**Why no neutral:** in pilot use of 5-point scales for organizational diagnostics, respondents cluster around 3 ("Neutral") to avoid taking a position. That central-tendency bias flattens the report. Forcing a lean (with an explicit "I don't know" escape hatch for genuine uncertainty) produces sharper, more useful findings.
 
 ---
 
@@ -133,10 +141,11 @@ Fixed order across all respondents: 1a, 1b, 2a, 2b, … 15a, 15b. Grouped by pil
 - Progress bar: "Question 7 of 30"
 - Capability eyebrow: e.g., `AGILITY · DECISION VELOCITY` (in `ochre`, ALL CAPS)
 - Statement: large Georgia serif — visual center of screen
-- Five tappable Likert tiles: `1 · Strongly Disagree`, `2 · Disagree`, `3 · Neutral`, `4 · Agree`, `5 · Strongly Agree`
-- Selecting a tile auto-advances to the next question after a 300ms transition
-- "Back" button below the scale to return to the previous question
-- Keyboard: arrow keys move between tiles, number keys 1–5 select, Enter advances
+- Four tappable Likert tiles: `1 · Strongly Disagree`, `2 · Disagree`, `3 · Agree`, `4 · Strongly Agree`
+- A separate, visually distinct **"I don't know"** option below the scale (so it doesn't compete for clicks with the 1–4 tiles, and respondents read past the tiles before reaching for it)
+- Selecting any answer auto-advances to the next question after a 300ms transition
+- "Back" button to return to the previous question
+- Keyboard: arrow keys move between tiles, number keys 1–4 select, `0` selects "I don't know", Enter advances
 
 See `08_respondent_workflows.md` for the full screen flow.
 

@@ -53,6 +53,10 @@ Each entry: date, area, decision, why.
 | 2026-04-28 | Privacy disclosure | Welcome screen line: *"Your responses are anonymized and aggregated. The team report uses AI assistance to interpret patterns."* |
 | 2026-04-28 | Question order | Fixed order across all respondents, grouped by pillar (Agility 1a–5b → Toughness 6a–10b → Resilience 11a–15b). |
 | 2026-04-28 | Reference docs | Carry over working-guidelines section of `CLAUDE.md` verbatim. Rewrite project-specific sections. Keep `REUSABLE_PATTERNS.md` portable, add applicability notes. Replace original `ENDURANCE_ASSESSMENT_SPEC.md` with index pointing to `product-spec/` folder. |
+| 2026-04-29 | Codes (REVERSAL) | Reversed 2026-04-28 "one code per respondent" decision. New model: **one cohort code per assessment**, every respondent uses the same code, `Assessment.maxUses` enforces a hard cap that the admin sets explicitly at creation (does not auto-grow). Why: distribution friction with the per-respondent model — admin has to send N different codes to N people. Trade-offs accepted: lose the "who hasn't responded yet" view; lose ability to revoke an individual code; same person could submit twice from different browsers. Mitigations: reports already require ≥3 respondents, so single-person duplicate skew is bounded; localStorage continues an in-flight Respondent within the same browser. Schema: `Assessment.code` (unique) + `Assessment.maxUses` added; `Respondent.code` dropped. Migration in `prisma/sql/002_cohort_codes.sql`. |
+| 2026-04-29 | Capabilities (drift fix) | Fixed a documentation drift discovered during Phase 4 prep. The original Phase 0 rewrite of `CLAUDE.md` and `src/data/constants.ts` used capability names from an early execution-plan draft (Sensing / Decisiveness / Reconfiguration / Learning Velocity / External Orientation, etc.) that did not match `product-spec/01_pillars_and_capabilities.md` and `product-spec/02_questions.md` (Decision Velocity / Market & Signal Intelligence / Adaptive Governance / Experimentation Muscle / Delegation & Empowerment, etc.). The product-spec set was the user-reviewed, merged version (PR #1). Realigned code + CLAUDE.md to match product-spec exactly. No DB migration required — capability names are not stored in the DB; only `questionId` text values like "1a" are. The `CapabilityKey` TypeScript union changed values, so any downstream code using the old keys would have been a compile error (none existed at the time of fix). |
+| 2026-04-29 | Likert scale | Switched from a 1–5 Likert (with "3 = Neutral") to a **1–4 Likert + "I don't know"**. Reason: pilot use of 5-point scales for organizational diagnostics shows central-tendency bias — respondents cluster on 3 to avoid taking a position, flattening the report. Forcing a lean (with an explicit "I don't know" escape hatch for genuine uncertainty) produces sharper findings. Decisions: (1) "I don't know" is stored as `Response.value = NULL`; row existence still means "answered". (2) Scoring excludes NULLs from every mean — capability score is mean of rated answers; a respondent with both angles "I don't know" doesn't contribute to that capability. (3) Per-capability anonymity floor: a capability is shown only if ≥3 respondents rated it (else "Insufficient data"). (4) Headline ≥3-respondent guardrail counts SUBMITTED respondents regardless of how many "I don't know"s they picked. (5) Submission completeness: all 30 questions must have an answer (1–4 OR "I don't know") before submit. (6) Bands re-cut to even quartiles over 1.00–4.00: Critical 1.00–1.74 / Needs 1.75–2.49 / Solid 2.50–3.24 / Strong 3.25–4.00. Migration: `prisma/sql/003_likert_scale.sql` makes `Response.value` nullable, clamps any legacy 5s to 4, adds a CHECK (value IS NULL OR value BETWEEN 1 AND 4). product-spec/02 + 03 updated; constants + types + seed regenerated. |
+| 2026-04-29 | Levels + demographics + take-flow UX | Five small changes after Phase 4 live-testing, batched together because they share files: (1) **Levels collapsed from 5 to 4** merged tiers — Individual Contributor / Early Career, Team Leader / Supervisor, Manager / Department Head, Senior Leader / Executive. The merged labels match the original methodology reference. Migration `prisma/sql/004_levels_and_demographics.sql` recreates the Postgres enum and remaps existing rows (executive→senior_leader, team_lead→team_leader). (2) **Likert tiles single-row** — four tiles in one horizontal row on desktop, 2×2 grid below 480px. (3) **Skip review screen** — selecting an answer for question 30 auto-submits and lands on `/take/done`. The `/take/review` page is deleted. Mid-flow Back navigation still allows edits before Q30. Trade-off accepted: once Q30 is selected, no take-back; admin post-closure edit is the recovery path. (4) **"Started" semantics + name required** — added `Respondent.demographicsCompletedAt` timestamp. The admin table + cap check now filter on `demographicsCompletedAt IS NOT NULL`, so ghost rows from "validated-then-bounced" respondents don't appear in the table or burn a cap slot. Name is now required at the API layer (DB column stays nullable to preserve existing data; Zod enforces non-empty). (5) **Admin detail table columns**: dropped "Started" date column, added "Submitted" date column; status pill is now binary (Started / Submitted) rather than three-state. product-spec/09 updated. |
 
 ---
 
@@ -69,7 +73,7 @@ Each entry: date, area, decision, why.
 | Auth (respondent) | 6-char access code (no app account) |
 | AI provider abstraction | Gemini default · Claude · OpenAI — selectable in admin panel |
 | PDF | `@react-pdf/renderer` (server-side) |
-| Scheduled jobs | Vercel Cron (hourly closure check) |
+| Scheduled jobs | Vercel Cron (daily closure check at 00:00 UTC — Hobby plan caps at daily crons) |
 | Hosting | Vercel |
 | Encryption (API keys at rest) | AES-256, master key in env var |
 | Email | **None** |
@@ -113,45 +117,48 @@ CorporateEnduranceAssessment/
 
 Each phase ends with a working, testable slice. After each phase, run `npx tsc --noEmit` and `npm run build`.
 
-### Phase 0 — Documentation (current phase)
+### Phase 0 — Documentation ✅
 - [x] Alignment captured in this file
-- [ ] `product-spec/` folder authored
-- [ ] `Plan & Progress/progress.md` skeleton ready
-- [ ] User reviews `product-spec/` and approves
-- [ ] `CLAUDE.md` rewritten
-- [ ] `PROJECT_DETAILS.md` rewritten
-- [ ] `REUSABLE_PATTERNS.md` updated with applicability notes
-- [ ] Original `ENDURANCE_ASSESSMENT_SPEC.md` replaced with index file
+- [x] `product-spec/` folder authored
+- [x] `Plan & Progress/progress.md` skeleton ready
+- [x] User reviews `product-spec/` and approves
+- [x] `CLAUDE.md` rewritten
+- [x] `PROJECT_DETAILS.md` rewritten
+- [x] `REUSABLE_PATTERNS.md` updated with applicability notes
+- [x] Original `ENDURANCE_ASSESSMENT_SPEC.md` replaced with index file
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation ✅
 - Next.js 16 + Tailwind project scaffold
-- Prisma schema (admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports)
-- Neon DB connected, schema pushed
-- Seed script: super admin user + sample assessment with sample responses for testing
+- Prisma schema (8 tables: Admin, Assessment, Department, Respondent, Response, Settings, GeneratedReport, AuditLog)
+- Neon DB schema pushed via `prisma/sql/000_initial_schema.sql`
+- Seed: super admin + Settings singleton + sample assessment with 5 respondents (3 submitted, including some "I don't know" answers)
 
-### Phase 2 — Admin auth + dashboard
-- NextAuth email/password
-- `/admin/login` and session handling
-- `/admin/dashboard` listing active + closed assessments
-- Admin role gating (super_admin vs. admin)
+### Phase 2 — Admin auth + dashboard ✅
+- NextAuth v5 credentials provider with bcrypt + Zod
+- `/admin/login` + session handling, JWT augmented with `id` + `role`
+- `/admin/dashboard` listing collecting + closed assessments
+- Role gating via `proxy.ts` + `requireAdmin` / `requireSuperAdmin` server helpers
 
-### Phase 3 — Assessment lifecycle (admin side)
-- `/admin/assessments/new` — form with departments, deadline, respondent count
-- 6-char code generation per respondent (collision-checked)
-- Admin sees codes per respondent, can copy
-- `/admin/assessments/[id]` detail page with respondent status table
+### Phase 3 — Assessment lifecycle (admin side) ✅
+- `/admin/assessments/new` — form with departments, deadline, **maxUses** (cap on demographics-completed respondents)
+- **One cohort code per assessment** (reversed from per-respondent — see decisions log 2026-04-29)
+- Cohort code visible/copyable on `/admin/assessments/[id]` detail page
+- `/admin/assessments/[id]` detail page (capacity strip, departments, respondent table, edit + close buttons)
+- `/admin/assessments/[id]/edit` page (clientName, deadline, departments add/remove with in-use protection, maxUses with floor)
 
-### Phase 4 — Respondent flow (happy path)
-- `/take` code entry
-- `/take/welcome` with privacy disclosure
-- `/take/demographics` (department / level / tenure / optional name)
-- `/take/question/[1..30]` Typeform-style flow
-- `/take/review` and `/take/done` confirmation
-- localStorage progress persistence + server-side answer save
+### Phase 4 — Respondent flow (happy path) ✅
+- `/take` code entry (case-insensitive)
+- `/take/welcome` with privacy disclosure + framing reminder
+- `/take/demographics` (name **required**, department dropdown, 4-tier Level, banded TenureBand)
+- `/take/question/[1..30]` Typeform-style with 1–4 tiles + "I don't know" + keyboard 1–4/0 + Back
+- **Q30 auto-submits** with explicit Submitting indicator (no review screen)
+- `/take/done` with localStorage cleanup
+- localStorage `tea_respondent_<UPPERCASED_CODE>` for resume
 
-### Phase 5 — Closure cron + status logic
-- Hourly Vercel Cron job flips `status: collecting → closed` past deadline
-- Respondent attempts to submit post-closure → 410 response
+### Phase 5 — Closure cron + status logic ✅
+- Hourly Vercel Cron via `vercel.json` + `/api/cron/closure` (Bearer auth via CRON_SECRET); audited as `trigger:'cron'`
+- Manual close via `POST /api/assessments/[id]/close` with admin-confirm UI; audited as `trigger:'manual'`
+- All 4 respondent routes 410 on closed assessment
 
 ### Phase 6 — Numerical report (live)
 - `/admin/assessments/[id]/results` with Summary + Capability Profile + Focus Areas + Anonymized Individuals tabs
