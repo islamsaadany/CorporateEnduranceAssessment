@@ -360,9 +360,9 @@ Assessment content (the 30 statements, pillar/capability mapping, band threshold
 ### Three Pillars × Five Capabilities × Two Angles = 30 statements
 | Pillar | Capabilities (5 each) |
 |--------|------------------------|
-| **Agility** | Sensing · Decisiveness · Reconfiguration · Learning Velocity · External Orientation |
-| **Toughness** | Operational Discipline · Risk Posture · Conviction · Cost & Capital Stewardship · Accountability |
-| **Resilience** | Recovery · Wellbeing · Continuity · Adaptive Capacity · Trust |
+| **Agility** | Decision Velocity · Market & Signal Intelligence · Adaptive Governance · Experimentation Muscle · Delegation & Empowerment |
+| **Toughness** | Leadership Strength Under Pressure · Financial Shock Absorption · Operational Continuity · Risk & Compliance Discipline · Trust & Collaboration |
+| **Resilience** | System Recoverability · Culture of Grit & Ownership · Learning Discipline · Strategic Adaptability · Offensive Readiness |
 
 Each capability has **two statements** (angle A, angle B). 1–5 Likert. Full content lives in `product-spec/01_pillars_and_capabilities.md` and `product-spec/02_questions.md`.
 

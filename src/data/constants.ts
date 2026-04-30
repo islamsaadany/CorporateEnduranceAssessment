@@ -17,67 +17,73 @@ export const PILLAR_LABELS: Record<PillarKey, string> = {
 
 // ─── Capabilities ─────────────────────────────────────────────────────
 
-// Order within each pillar matches product-spec/01.
+// Order matches the canonical numeric ID in product-spec/01 (1→5 within
+// Agility, 6→10 within Toughness, 11→15 within Resilience).
 export const CAPABILITY_ORDER: CapabilityKey[] = [
   // Agility
-  'sensing',
-  'decisiveness',
-  'reconfiguration',
-  'learning_velocity',
-  'external_orientation',
+  'decision_velocity',
+  'market_signal_intelligence',
+  'adaptive_governance',
+  'experimentation_muscle',
+  'delegation_empowerment',
   // Toughness
-  'operational_discipline',
-  'risk_posture',
-  'conviction',
-  'cost_capital_stewardship',
-  'accountability',
+  'leadership_strength_under_pressure',
+  'financial_shock_absorption',
+  'operational_continuity',
+  'risk_compliance_discipline',
+  'trust_collaboration',
   // Resilience
-  'recovery',
-  'wellbeing',
-  'continuity',
-  'adaptive_capacity',
-  'trust',
+  'system_recoverability',
+  'culture_of_grit_ownership',
+  'learning_discipline',
+  'strategic_adaptability',
+  'offensive_readiness',
 ]
 
+// Display labels — use these verbatim in UI, copy, and reports.
+// Casing matches product-spec/01 ("Decision Velocity", not "decision velocity").
 export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
-  sensing: 'Sensing',
-  decisiveness: 'Decisiveness',
-  reconfiguration: 'Reconfiguration',
-  learning_velocity: 'Learning Velocity',
-  external_orientation: 'External Orientation',
-  operational_discipline: 'Operational Discipline',
-  risk_posture: 'Risk Posture',
-  conviction: 'Conviction',
-  cost_capital_stewardship: 'Cost & Capital Stewardship',
-  accountability: 'Accountability',
-  recovery: 'Recovery',
-  wellbeing: 'Wellbeing',
-  continuity: 'Continuity',
-  adaptive_capacity: 'Adaptive Capacity',
-  trust: 'Trust',
+  decision_velocity: 'Decision Velocity',
+  market_signal_intelligence: 'Market & Signal Intelligence',
+  adaptive_governance: 'Adaptive Governance',
+  experimentation_muscle: 'Experimentation Muscle',
+  delegation_empowerment: 'Delegation & Empowerment',
+  leadership_strength_under_pressure: 'Leadership Strength Under Pressure',
+  financial_shock_absorption: 'Financial Shock Absorption',
+  operational_continuity: 'Operational Continuity',
+  risk_compliance_discipline: 'Risk & Compliance Discipline',
+  trust_collaboration: 'Trust & Collaboration',
+  system_recoverability: 'System Recoverability',
+  culture_of_grit_ownership: 'Culture of Grit & Ownership',
+  learning_discipline: 'Learning Discipline',
+  strategic_adaptability: 'Strategic Adaptability',
+  offensive_readiness: 'Offensive Readiness',
 }
 
 export const CAPABILITY_TO_PILLAR: Record<CapabilityKey, PillarKey> = {
-  sensing: 'agility',
-  decisiveness: 'agility',
-  reconfiguration: 'agility',
-  learning_velocity: 'agility',
-  external_orientation: 'agility',
-  operational_discipline: 'toughness',
-  risk_posture: 'toughness',
-  conviction: 'toughness',
-  cost_capital_stewardship: 'toughness',
-  accountability: 'toughness',
-  recovery: 'resilience',
-  wellbeing: 'resilience',
-  continuity: 'resilience',
-  adaptive_capacity: 'resilience',
-  trust: 'resilience',
+  decision_velocity: 'agility',
+  market_signal_intelligence: 'agility',
+  adaptive_governance: 'agility',
+  experimentation_muscle: 'agility',
+  delegation_empowerment: 'agility',
+  leadership_strength_under_pressure: 'toughness',
+  financial_shock_absorption: 'toughness',
+  operational_continuity: 'toughness',
+  risk_compliance_discipline: 'toughness',
+  trust_collaboration: 'toughness',
+  system_recoverability: 'resilience',
+  culture_of_grit_ownership: 'resilience',
+  learning_discipline: 'resilience',
+  strategic_adaptability: 'resilience',
+  offensive_readiness: 'resilience',
 }
 
 // ─── Bands ────────────────────────────────────────────────────────────
 
 // Inclusive lower / inclusive upper. Uniform across overall / pillar / capability.
+// NOTE: bands here assume the legacy 1–5 Likert scale. If/when the scoring scale
+// changes (e.g., to 1–4 with a "Not sure" non-answer), update both this table
+// and product-spec/03_scoring_and_bands.md in the same change.
 export const BAND_THRESHOLDS: Array<{ key: BandKey; min: number; max: number; label: string }> = [
   { key: 'critical_gap', min: 1.0, max: 1.99, label: 'Critical Gap' },
   { key: 'needs_work', min: 2.0, max: 2.99, label: 'Needs Work' },
@@ -89,7 +95,6 @@ export function bandFor(score: number): BandKey {
   for (const b of BAND_THRESHOLDS) {
     if (score >= b.min && score <= b.max) return b.key
   }
-  // Out-of-range scores should not occur given 1–5 input; clamp defensively.
   return score < 1 ? 'critical_gap' : 'strong'
 }
 

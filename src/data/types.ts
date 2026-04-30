@@ -5,23 +5,23 @@ export type PillarKey = 'agility' | 'toughness' | 'resilience'
 
 export type CapabilityKey =
   // Agility
-  | 'sensing'
-  | 'decisiveness'
-  | 'reconfiguration'
-  | 'learning_velocity'
-  | 'external_orientation'
+  | 'decision_velocity'
+  | 'market_signal_intelligence'
+  | 'adaptive_governance'
+  | 'experimentation_muscle'
+  | 'delegation_empowerment'
   // Toughness
-  | 'operational_discipline'
-  | 'risk_posture'
-  | 'conviction'
-  | 'cost_capital_stewardship'
-  | 'accountability'
+  | 'leadership_strength_under_pressure'
+  | 'financial_shock_absorption'
+  | 'operational_continuity'
+  | 'risk_compliance_discipline'
+  | 'trust_collaboration'
   // Resilience
-  | 'recovery'
-  | 'wellbeing'
-  | 'continuity'
-  | 'adaptive_capacity'
-  | 'trust'
+  | 'system_recoverability'
+  | 'culture_of_grit_ownership'
+  | 'learning_discipline'
+  | 'strategic_adaptability'
+  | 'offensive_readiness'
 
 export type Angle = 'a' | 'b'
 
