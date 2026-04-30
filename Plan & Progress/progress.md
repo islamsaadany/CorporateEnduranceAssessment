@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 2 — Admin auth + dashboard **(landed; awaits live Vercel verification)**
+**Current phase:** Phase 3 — Assessment lifecycle (admin side) **(landed; awaits live Vercel verification)**
 **Last updated:** 2026-04-29
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -53,10 +53,11 @@ The `(1)` / `(5)` upload duplicates have been removed.
 - [ ] Live Vercel verification: log in with seeded super admin → land on dashboard → see "Acme Corp (sample)" → sign out → log in again *(awaits user)*
 
 ### Phase 3 — Assessment lifecycle (admin side)
-- [ ] `/admin/assessments/new` form with departments, deadline, respondents
-- [ ] 6-char code generation per respondent (collision-checked)
-- [ ] Codes visible/copyable in admin UI
-- [ ] `/admin/assessments/[id]` detail page with status table
+- [x] `/admin/assessments/new` form with departments, deadline, respondents
+- [x] 6-char code generation per respondent (collision-checked)
+- [x] Codes visible/copyable in admin UI (per-row Copy + "Copy all codes")
+- [x] `/admin/assessments/[id]` detail page with status table
+- [ ] Live Vercel verification: create a new assessment → land on detail page → see N codes → copy one → counts (not started / in progress / submitted) match seeded data *(awaits user)*
 
 ### Phase 4 — Respondent flow (happy path)
 - [ ] `/take` code entry
@@ -122,6 +123,7 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 | Date | Phase | Change |
 |------|-------|--------|
+| 2026-04-29 | 3 | Phase 3 landed: `src/lib/codes.ts` (6-char generator over 31-char alphabet excluding 0/O/1/I/L, batch collision-checked against the unique `Respondent.code` index, retries up to 5 times); `src/lib/audit.ts` (`logAdminAction` + `logRespondentLifecycle` with typed action enums and JSON-safe metadata); `POST /api/assessments` (Zod validation, future-deadline check, dept dedup, transactional create wired to `assessment.create` audit log); `/admin/assessments/new` server page + `NewAssessmentForm` client (client name, future deadline, dynamic department list, respondent count 3–100); `/admin/assessments/[id]` detail page (status pill, totals strip not-started/in-progress/submitted, departments chips, respondent table with code + name + dept + level + tenure + status, per-row + bulk "Copy all codes" client buttons). Build clean (8 routes). |
 | 2026-04-29 | 2 | Phase 2 landed: NextAuth v5 credentials provider with bcrypt + Zod; JWT session augmented with `id` + `role`; `proxy.ts` (Next 16's renamed middleware) gates `/admin/*` for unauthed users and bounces authed users away from `/admin/login`; `src/lib/admin-guard.ts` provides `requireAdmin()` / `requireSuperAdmin()` server-side helpers; `/admin/login` page (server component + client form using `signIn` from `next-auth/react`); `/admin/layout.tsx` with header nav (super-admin links visible only to super admins) + sign-out form action; `/admin/dashboard` listing collecting + closed assessments grouped by status. Verified with `npx tsc --noEmit` and `npm run build` (6 routes). |
 | 2026-04-29 | 1 | DB workflow split into two surfaces: `npm run db:*` for users with a terminal, hand-runnable SQL files in `prisma/sql/` for users with only the Neon SQL editor. Generated `000_initial_schema.sql` (via `prisma migrate diff`) and `001_seed_sample_data.sql` (via `scripts/gen-seed-sql.mjs`). Documented in CLAUDE.md, README, and `prisma/sql/README.md`. |
 | 2026-04-29 | 1 | Phase 1 scaffold landed: package.json (Next 16 / React 19 / Prisma 5 / NextAuth v5 / Tailwind 3), tsconfig, next.config.mjs, tailwind.config.ts, postcss.config.mjs, .eslintrc, .gitignore, .env.example. |
