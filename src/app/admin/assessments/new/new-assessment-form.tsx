@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 // Default deadline: 14 days out at 23:59 local time. The datetime-local
@@ -23,9 +23,13 @@ export function NewAssessmentForm() {
   const [clientName, setClientName] = useState('')
   const [deadline, setDeadline] = useState(defaultDeadline())
   const [departments, setDepartments] = useState<string[]>([''])
-  const [respondentCount, setRespondentCount] = useState(8)
+  const [maxUses, setMaxUses] = useState(8)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  // Used by the Enter-key handler to focus the new department row that
+  // gets appended.
+  const deptInputsRef = useRef<Array<HTMLInputElement | null>>([])
 
   const updateDept = (i: number, val: string) => {
     setDepartments((prev) => prev.map((d, j) => (j === i ? val : d)))
@@ -33,6 +37,22 @@ export function NewAssessmentForm() {
   const addDept = () => setDepartments((prev) => [...prev, ''])
   const removeDept = (i: number) =>
     setDepartments((prev) => (prev.length === 1 ? prev : prev.filter((_, j) => j !== i)))
+
+  // Pressing Enter inside a department input adds a new empty row and
+  // focuses it — instead of submitting the whole form. If the current
+  // row is itself empty, we do nothing (no stacking blank rows).
+  const onDeptKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, i: number) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const current = departments[i].trim()
+    if (!current) return
+    setDepartments((prev) => [...prev, ''])
+    // Focus the new row after React renders it.
+    setTimeout(() => {
+      const next = deptInputsRef.current[i + 1]
+      next?.focus()
+    }, 0)
+  }
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,7 +63,7 @@ export function NewAssessmentForm() {
       setError('Add at least one department.')
       return
     }
-    if (respondentCount < 3) {
+    if (maxUses < 3) {
       setError('Respondent count must be at least 3 to satisfy the anonymity guardrail.')
       return
     }
@@ -61,7 +81,7 @@ export function NewAssessmentForm() {
           clientName: clientName.trim(),
           deadline: deadlineDate.toISOString(),
           departments: cleanDepartments,
-          respondentCount,
+          maxUses,
         }),
       })
 
@@ -109,15 +129,17 @@ export function NewAssessmentForm() {
         />
       </Field>
 
-      <Field label="Departments" hint="Respondents pick from this list during demographics. You can add more later, but cannot remove a department once any respondent has used it.">
+      <Field label="Departments" hint="Respondents pick from this list during demographics. Press Enter inside a row to add another. You can add more later, but cannot remove a department once any respondent has used it.">
         <div className="space-y-2">
           {departments.map((d, i) => (
             <div key={i} className="flex items-center gap-2">
               <input
+                ref={(el) => { deptInputsRef.current[i] = el }}
                 type="text"
                 maxLength={60}
                 value={d}
                 onChange={(e) => updateDept(i, e.target.value)}
+                onKeyDown={(e) => onDeptKeyDown(e, i)}
                 placeholder={i === 0 ? 'e.g. Sales' : 'e.g. Engineering'}
                 className="input"
               />
@@ -142,14 +164,14 @@ export function NewAssessmentForm() {
         </div>
       </Field>
 
-      <Field label="Respondent count" hint="The system will generate this many unique 6-character codes. Minimum 3 (anonymity guardrail), maximum 100.">
+      <Field label="Maximum respondents (cap)" hint="The system will accept up to this many submissions. Minimum 3 (anonymity guardrail), maximum 100. The cap is hard — past this number, the cohort code stops working. You can raise it later from the assessment edit screen.">
         <input
           type="number"
           min={3}
           max={100}
           required
-          value={respondentCount}
-          onChange={(e) => setRespondentCount(Number(e.target.value) || 0)}
+          value={maxUses}
+          onChange={(e) => setMaxUses(Number(e.target.value) || 0)}
           className="input w-32"
         />
       </Field>

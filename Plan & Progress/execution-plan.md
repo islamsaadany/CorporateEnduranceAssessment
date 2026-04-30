@@ -53,6 +53,7 @@ Each entry: date, area, decision, why.
 | 2026-04-28 | Privacy disclosure | Welcome screen line: *"Your responses are anonymized and aggregated. The team report uses AI assistance to interpret patterns."* |
 | 2026-04-28 | Question order | Fixed order across all respondents, grouped by pillar (Agility 1a–5b → Toughness 6a–10b → Resilience 11a–15b). |
 | 2026-04-28 | Reference docs | Carry over working-guidelines section of `CLAUDE.md` verbatim. Rewrite project-specific sections. Keep `REUSABLE_PATTERNS.md` portable, add applicability notes. Replace original `ENDURANCE_ASSESSMENT_SPEC.md` with index pointing to `product-spec/` folder. |
+| 2026-04-29 | Codes (REVERSAL) | Reversed 2026-04-28 "one code per respondent" decision. New model: **one cohort code per assessment**, every respondent uses the same code, `Assessment.maxUses` enforces a hard cap that the admin sets explicitly at creation (does not auto-grow). Why: distribution friction with the per-respondent model — admin has to send N different codes to N people. Trade-offs accepted: lose the "who hasn't responded yet" view; lose ability to revoke an individual code; same person could submit twice from different browsers. Mitigations: reports already require ≥3 respondents, so single-person duplicate skew is bounded; localStorage continues an in-flight Respondent within the same browser. Schema: `Assessment.code` (unique) + `Assessment.maxUses` added; `Respondent.code` dropped. Migration in `prisma/sql/002_cohort_codes.sql`. |
 
 ---
 

@@ -9,7 +9,8 @@ Open the [Neon Console](https://console.neon.tech) → your project → **SQL Ed
 | Order | File | What it does | When to run |
 |-------|------|--------------|-------------|
 | 1 | [`000_initial_schema.sql`](./000_initial_schema.sql) | Creates all enums, tables, indexes, foreign keys | First-time setup, or when re-pointing at a fresh database |
-| 2 | [`001_seed_sample_data.sql`](./001_seed_sample_data.sql) | Inserts super admin + Settings singleton + 1 sample assessment with 5 respondents | After 000, or whenever you want to refresh sample data |
+| 2 | [`001_seed_sample_data.sql`](./001_seed_sample_data.sql) | Inserts super admin + Settings singleton + 1 sample assessment with respondents | After 000, or whenever you want to refresh sample data |
+| 3 | [`002_cohort_codes.sql`](./002_cohort_codes.sql) | Migrates from per-respondent codes to one cohort code per assessment (adds `Assessment.code` + `Assessment.maxUses`, drops `Respondent.code`) | Run **once** on any DB that was set up before 2026-04-29 |
 
 ## Sample super-admin login
 

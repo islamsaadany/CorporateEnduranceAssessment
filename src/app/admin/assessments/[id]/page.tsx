@@ -4,7 +4,6 @@ import { requireAdmin } from '@/lib/admin-guard'
 import { prisma } from '@/lib/prisma'
 import { LEVEL_LABELS, TENURE_LABELS } from '@/data/constants'
 import { CopyButton } from './copy-button'
-import { CopyAllCodes } from './copy-all-codes'
 
 export const metadata = { title: 'Assessment — The Endurance Assessment' }
 
@@ -21,7 +20,7 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
     include: {
       departments: { orderBy: { name: 'asc' } },
       respondents: {
-        orderBy: { code: 'asc' },
+        orderBy: { createdAt: 'desc' },
         include: { department: { select: { name: true } } },
       },
     },
@@ -29,11 +28,11 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
   if (!assessment) notFound()
 
   const totals = {
-    total: assessment.respondents.length,
-    notStarted: assessment.respondents.filter((r) => !r.startedAt && !r.submittedAt).length,
+    started: assessment.respondents.length,
     inProgress: assessment.respondents.filter((r) => r.startedAt && !r.submittedAt).length,
     submitted: assessment.respondents.filter((r) => r.submittedAt).length,
   }
+  const remaining = Math.max(0, assessment.maxUses - totals.started)
 
   const dateFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -55,14 +54,37 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
               </span>
             </p>
           </div>
+          <Link
+            href={`/admin/assessments/${assessment.id}/edit`}
+            className="rounded-md border border-canvas-border bg-canvas px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-canvas-muted"
+          >
+            Edit
+          </Link>
         </div>
       </div>
 
+      {/* Cohort code card */}
+      <section className="rounded-lg border border-canvas-border bg-canvas p-5">
+        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">Access code</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <code className="rounded bg-canvas-muted px-3 py-1.5 font-mono text-2xl font-semibold tracking-widest text-ink">
+              {assessment.code}
+            </code>
+            <CopyButton value={assessment.code} label="Copy code" />
+          </div>
+          <p className="text-sm text-ink-muted">
+            Share this code with every respondent. It is the same for everyone — there is no per-person code.
+          </p>
+        </div>
+      </section>
+
+      {/* Capacity strip */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Respondents" value={totals.total} />
-        <Stat label="Not started" value={totals.notStarted} />
+        <Stat label="Started" value={totals.started} secondary={`of ${assessment.maxUses} cap`} />
         <Stat label="In progress" value={totals.inProgress} />
         <Stat label="Submitted" value={totals.submitted} accent />
+        <Stat label="Remaining capacity" value={remaining} />
       </section>
 
       <section>
@@ -80,53 +102,53 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-ink-muted">
-            Respondents <span className="ml-1 text-ink-subtle">({totals.total})</span>
-          </h2>
-          <CopyAllCodes codes={assessment.respondents.map((r) => r.code)} />
-        </div>
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-ink-muted">
+          Respondents <span className="ml-1 text-ink-subtle">({totals.started})</span>
+        </h2>
 
-        <div className="overflow-hidden rounded-lg border border-canvas-border bg-canvas">
-          <table className="w-full text-sm">
-            <thead className="border-b border-canvas-border bg-canvas-muted text-left text-xs font-medium uppercase tracking-wider text-ink-muted">
-              <tr>
-                <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Level</th>
-                <th className="px-4 py-3">Tenure</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-canvas-border">
-              {assessment.respondents.map((r) => {
-                const status = r.submittedAt ? 'submitted' : r.startedAt ? 'in_progress' : 'not_started'
-                return (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3 font-mono text-xs text-ink">
-                      <div className="flex items-center gap-2">
-                        <span>{r.code}</span>
-                        <CopyButton value={r.code} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink">{r.name ?? <span className="text-ink-subtle">—</span>}</td>
-                    <td className="px-4 py-3 text-ink-muted">{r.department?.name ?? <span className="text-ink-subtle">—</span>}</td>
-                    <td className="px-4 py-3 text-ink-muted">
-                      {r.level ? LEVEL_LABELS[r.level] : <span className="text-ink-subtle">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted">
-                      {r.tenure ? TENURE_LABELS[r.tenure] : <span className="text-ink-subtle">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <RespondentStatus status={status} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        {assessment.respondents.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-canvas-border bg-canvas px-6 py-10 text-center text-sm text-ink-muted">
+            No respondents yet. Share the access code above to get started.
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-canvas-border bg-canvas">
+            <table className="w-full text-sm">
+              <thead className="border-b border-canvas-border bg-canvas-muted text-left text-xs font-medium uppercase tracking-wider text-ink-muted">
+                <tr>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Department</th>
+                  <th className="px-4 py-3">Level</th>
+                  <th className="px-4 py-3">Tenure</th>
+                  <th className="px-4 py-3">Started</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-canvas-border">
+                {assessment.respondents.map((r) => {
+                  const status = r.submittedAt ? 'submitted' : r.startedAt ? 'in_progress' : 'not_started'
+                  return (
+                    <tr key={r.id}>
+                      <td className="px-4 py-3 text-ink">{r.name ?? <span className="text-ink-subtle">—</span>}</td>
+                      <td className="px-4 py-3 text-ink-muted">{r.department?.name ?? <span className="text-ink-subtle">—</span>}</td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {r.level ? LEVEL_LABELS[r.level] : <span className="text-ink-subtle">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {r.tenure ? TENURE_LABELS[r.tenure] : <span className="text-ink-subtle">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {r.startedAt ? dateFmt.format(r.startedAt) : <span className="text-ink-subtle">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <RespondentStatus status={status} />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   )
@@ -139,11 +161,12 @@ function StatusPill({ status }: { status: 'collecting' | 'closed' }) {
   return <span className="rounded bg-ink/10 px-2 py-0.5 text-xs font-medium text-ink">Closed</span>
 }
 
-function Stat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+function Stat({ label, value, secondary, accent }: { label: string; value: number; secondary?: string; accent?: boolean }) {
   return (
     <div className={`rounded-lg border border-canvas-border bg-canvas px-4 py-3 ${accent ? 'ring-1 ring-band-strong/20' : ''}`}>
       <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${accent ? 'text-band-strong' : 'text-ink'}`}>{value}</p>
+      {secondary ? <p className="text-xs text-ink-subtle">{secondary}</p> : null}
     </div>
   )
 }

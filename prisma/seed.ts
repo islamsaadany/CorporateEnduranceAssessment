@@ -2,16 +2,20 @@
  * Seeds the DB with:
  *   - One super admin (credentials from SEED_SUPER_ADMIN_* env vars)
  *   - One Settings singleton (provider=gemini, no API key — bootstrap banner will show)
- *   - One sample assessment ("Acme Corp") with 2 departments and 5 respondents
- *     · 3 of the 5 have submitted full answers, so the ≥3-respondent guardrail is satisfied
- *     · 1 has started but not submitted (in-progress state)
- *     · 1 has not yet started (fresh code)
+ *   - One sample assessment ("Acme Corp (sample)") with:
+ *       · 1 cohort access code (everyone uses the same code)
+ *       · 2 departments (Sales, Engineering)
+ *       · maxUses = 8 (the cap)
+ *       · 5 sample Respondent rows pre-seeded so the report flow has data
+ *           - 3 submitted with full answer sets
+ *           - 1 in-progress (28 of 30 answers)
+ *           - 1 fresh (started, no answers)
  *
  * Run with: `npm run seed`
  *
  * NOTE: this seed uses placeholder question IDs ("1a"..."15b"). The locked
  * question content lives in product-spec/02_questions.md and will move to
- * src/data/questions.ts in Phase 4. The seed only needs the IDs to exist.
+ * src/data/questions.ts in Phase 4.
  */
 
 import { PrismaClient, AdminRole, AssessmentStatus, AiProvider, Level, TenureBand } from '@prisma/client'
@@ -40,6 +44,15 @@ function answerFor(respondentIndex: number, questionIndex: number): number {
   return Math.max(1, Math.min(5, base)) as 1 | 2 | 3 | 4 | 5
 }
 
+async function uniqueCode() {
+  for (let i = 0; i < 10; i++) {
+    const candidate = genCode()
+    const taken = await prisma.assessment.findUnique({ where: { code: candidate }, select: { id: true } })
+    if (!taken) return candidate
+  }
+  throw new Error('Could not generate a unique cohort code')
+}
+
 async function main() {
   const email = process.env.SEED_SUPER_ADMIN_EMAIL || 'superadmin@forefront.example'
   const password = process.env.SEED_SUPER_ADMIN_PASSWORD || 'change-me-on-first-login'
@@ -61,7 +74,7 @@ async function main() {
     create: { id: 'singleton', aiProvider: AiProvider.gemini, promptVersion: 1 },
   })
 
-  console.log('▶ Seeding sample assessment "Acme Corp"…')
+  console.log('▶ Seeding sample assessment "Acme Corp (sample)"…')
   const deadline = new Date()
   deadline.setDate(deadline.getDate() + 14)
 
@@ -71,9 +84,12 @@ async function main() {
     await prisma.assessment.delete({ where: { id: prior.id } })
   }
 
+  const cohortCode = await uniqueCode()
   const assessment = await prisma.assessment.create({
     data: {
       clientName: 'Acme Corp (sample)',
+      code: cohortCode,
+      maxUses: 8,
       status: AssessmentStatus.collecting,
       deadline,
       createdById: superAdmin.id,
@@ -82,16 +98,17 @@ async function main() {
     include: { departments: true },
   })
   console.log(`   ✓ assessment: ${assessment.id}`)
+  console.log(`   ✓ cohort access code: ${cohortCode}`)
 
   const sales = assessment.departments.find((d) => d.name === 'Sales')!
   const eng = assessment.departments.find((d) => d.name === 'Engineering')!
 
   const respondents = [
-    { code: genCode(), department: sales, level: Level.manager, tenure: TenureBand.y4_7, name: 'Avery R.', submit: true },
-    { code: genCode(), department: sales, level: Level.senior_leader, tenure: TenureBand.y8_15, name: 'Blake S.', submit: true },
-    { code: genCode(), department: eng, level: Level.executive, tenure: TenureBand.gt_15y, name: 'Casey T.', submit: true },
-    { code: genCode(), department: eng, level: Level.team_lead, tenure: TenureBand.y1_3, name: 'Drew V.', submit: false },
-    { code: genCode(), department: eng, level: Level.individual_contributor, tenure: TenureBand.lt_1y, name: null, submit: false },
+    { department: sales, level: Level.manager, tenure: TenureBand.y4_7, name: 'Avery R.', submit: true },
+    { department: sales, level: Level.senior_leader, tenure: TenureBand.y8_15, name: 'Blake S.', submit: true },
+    { department: eng, level: Level.executive, tenure: TenureBand.gt_15y, name: 'Casey T.', submit: true },
+    { department: eng, level: Level.team_lead, tenure: TenureBand.y1_3, name: 'Drew V.', submit: false },
+    { department: eng, level: Level.individual_contributor, tenure: TenureBand.lt_1y, name: null, submit: false },
   ]
 
   for (let i = 0; i < respondents.length; i++) {
@@ -99,12 +116,11 @@ async function main() {
     const created = await prisma.respondent.create({
       data: {
         assessmentId: assessment.id,
-        code: r.code,
         name: r.name ?? undefined,
         departmentId: r.department.id,
         level: r.level,
         tenure: r.tenure,
-        startedAt: i < 4 ? new Date() : null, // first 4 have started; last is fresh
+        startedAt: new Date(), // first 4 have started; last is also "started" but with no answers
         submittedAt: r.submit ? new Date() : null,
       },
     })
@@ -129,12 +145,13 @@ async function main() {
       })
     }
 
-    console.log(`   ✓ respondent ${i + 1}/5: code=${r.code} submitted=${r.submit}`)
+    console.log(`   ✓ respondent ${i + 1}/5 submitted=${r.submit}`)
   }
 
   console.log('\nDone. Sample super-admin login:')
   console.log(`  email:    ${email}`)
   console.log(`  password: ${password}`)
+  console.log(`\nSample cohort access code (share with respondents): ${cohortCode}`)
   console.log('\nReminder: change SEED_SUPER_ADMIN_PASSWORD before running in any shared environment.\n')
 }
 

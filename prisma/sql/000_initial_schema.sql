@@ -31,6 +31,8 @@ CREATE TABLE "Admin" (
 CREATE TABLE "Assessment" (
     "id" TEXT NOT NULL,
     "clientName" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "maxUses" INTEGER NOT NULL,
     "status" "AssessmentStatus" NOT NULL DEFAULT 'collecting',
     "deadline" TIMESTAMP(3) NOT NULL,
     "closedAt" TIMESTAMP(3),
@@ -55,7 +57,6 @@ CREATE TABLE "Department" (
 CREATE TABLE "Respondent" (
     "id" TEXT NOT NULL,
     "assessmentId" TEXT NOT NULL,
-    "code" TEXT NOT NULL,
     "name" TEXT,
     "departmentId" TEXT,
     "level" "Level",
@@ -130,6 +131,9 @@ CREATE UNIQUE INDEX "Admin_email_key" ON "Admin"("email");
 CREATE INDEX "Admin_role_idx" ON "Admin"("role");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Assessment_code_key" ON "Assessment"("code");
+
+-- CreateIndex
 CREATE INDEX "Assessment_status_deadline_idx" ON "Assessment"("status", "deadline");
 
 -- CreateIndex
@@ -139,13 +143,13 @@ CREATE INDEX "Assessment_createdById_idx" ON "Assessment"("createdById");
 CREATE UNIQUE INDEX "Department_assessmentId_name_key" ON "Department"("assessmentId", "name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Respondent_code_key" ON "Respondent"("code");
-
--- CreateIndex
 CREATE INDEX "Respondent_assessmentId_idx" ON "Respondent"("assessmentId");
 
 -- CreateIndex
 CREATE INDEX "Respondent_departmentId_idx" ON "Respondent"("departmentId");
+
+-- CreateIndex
+CREATE INDEX "Respondent_assessmentId_submittedAt_idx" ON "Respondent"("assessmentId", "submittedAt");
 
 -- CreateIndex
 CREATE INDEX "Response_questionId_idx" ON "Response"("questionId");

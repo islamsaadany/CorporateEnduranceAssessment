@@ -1,15 +1,13 @@
 /**
- * 6-character access code generator for respondents.
+ * 6-character cohort access code generator (one per Assessment).
  *
  * Alphabet excludes 0/O/1/I/L to avoid handwriting + reading ambiguity
- * (a respondent reads the code from a slack message, an email, a
- * sticky note — collisions in shape matter). 31 characters → ~887M
- * possible codes, more than enough for any single assessment.
+ * (an admin reads the code from the UI to a respondent in chat / email
+ * / SMS — collisions in shape matter). 31 characters → ~887M possible
+ * codes, more than enough for any deployment.
  *
- * Generation runs in a loop with a per-batch collision check against
- * the unique `Respondent.code` index. We retry on conflict; the
- * caller wraps the bulk insert in a transaction so partial failure
- * doesn't leave half-created respondents.
+ * Validation always uppercases the input — codes are case-insensitive
+ * for users.
  */
 
 import { prisma } from './prisma'
@@ -26,28 +24,19 @@ export function generateCode(): string {
 }
 
 /**
- * Generate `count` unique codes, checking the DB so we don't collide
- * with an existing respondent (across any assessment — `code` is
- * globally unique). Returns the array; throws if it can't converge
- * within reasonable retries (vanishingly unlikely at the alphabet size
- * we use, but worth signaling rather than infinite-looping).
+ * Generate a unique cohort code, retrying on collision against the
+ * unique `Assessment.code` index. Throws if it can't converge within
+ * reasonable retries (vanishingly unlikely at the alphabet size we use).
  */
-export async function generateUniqueCodes(count: number): Promise<string[]> {
-  if (count <= 0) return []
-  const MAX_BATCH_RETRIES = 5
-
-  const codes = new Set<string>()
-  for (let attempt = 0; attempt < MAX_BATCH_RETRIES; attempt++) {
-    while (codes.size < count) codes.add(generateCode())
-    const candidates = Array.from(codes)
-    const taken = await prisma.respondent.findMany({
-      where: { code: { in: candidates } },
-      select: { code: true },
+export async function generateUniqueAssessmentCode(): Promise<string> {
+  const MAX_ATTEMPTS = 10
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const candidate = generateCode()
+    const taken = await prisma.assessment.findUnique({
+      where: { code: candidate },
+      select: { id: true },
     })
-    if (taken.length === 0) return candidates
-    for (const t of taken) codes.delete(t.code)
+    if (!taken) return candidate
   }
-  throw new Error(
-    `Failed to generate ${count} unique respondent codes after ${MAX_BATCH_RETRIES} attempts.`,
-  )
+  throw new Error(`Failed to generate a unique assessment code after ${MAX_ATTEMPTS} attempts.`)
 }

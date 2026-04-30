@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateUniqueCodes } from '@/lib/codes'
+import { generateUniqueAssessmentCode } from '@/lib/codes'
 import { logAdminAction } from '@/lib/audit'
 
 const createSchema = z.object({
@@ -13,7 +13,9 @@ const createSchema = z.object({
     .array(z.string().trim().min(1).max(60))
     .min(1, 'At least one department is required.')
     .max(20, 'Too many departments (max 20).'),
-  respondentCount: z.number().int().min(3).max(100),
+  // Hard cap on the number of respondents. Floor of 3 mirrors the
+  // anonymity guardrail; 100 is a sanity ceiling that can be raised.
+  maxUses: z.number().int().min(3).max(100),
 })
 
 export async function POST(req: Request) {
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
       { status: 400 },
     )
   }
-  const { clientName, deadline, departments, respondentCount } = parsed.data
+  const { clientName, deadline, departments, maxUses } = parsed.data
 
   const deadlineDate = new Date(deadline)
   if (deadlineDate.getTime() <= Date.now()) {
@@ -55,22 +57,18 @@ export async function POST(req: Request) {
   }
   const uniqueDepartments = Array.from(seen.values())
 
-  // Pre-generate codes BEFORE the transaction so the (uncommon) retry
-  // loop inside generateUniqueCodes doesn't hold a DB transaction open.
-  const codes = await generateUniqueCodes(respondentCount)
+  const code = await generateUniqueAssessmentCode()
 
-  const assessment = await prisma.$transaction(async (tx) => {
-    const created = await tx.assessment.create({
-      data: {
-        clientName,
-        deadline: deadlineDate,
-        createdById: session.user.id,
-        departments: { create: uniqueDepartments.map((name) => ({ name })) },
-        respondents: { create: codes.map((code) => ({ code })) },
-      },
-      select: { id: true },
-    })
-    return created
+  const assessment = await prisma.assessment.create({
+    data: {
+      clientName,
+      code,
+      maxUses,
+      deadline: deadlineDate,
+      createdById: session.user.id,
+      departments: { create: uniqueDepartments.map((name) => ({ name })) },
+    },
+    select: { id: true },
   })
 
   await logAdminAction({
@@ -80,8 +78,10 @@ export async function POST(req: Request) {
     metadata: {
       clientName,
       departmentCount: uniqueDepartments.length,
-      respondentCount: codes.length,
+      maxUses,
       deadline: deadlineDate.toISOString(),
+      // We deliberately do NOT include the cohort code in the audit metadata —
+      // the audit log is queryable by all admins and the code is a credential.
     },
   })
 

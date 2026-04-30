@@ -71,6 +71,13 @@ model Admin {
 model Assessment {
   id          String           @id @default(uuid())
   clientName  String
+  // Cohort code: one code per assessment, shared by every respondent.
+  // 6 chars over an alphabet that excludes 0/O/1/I/L. Stored uppercased.
+  code        String           @unique
+  // Hard cap on the number of respondent rows that can be created via
+  // code validation. Set explicitly by the admin at creation; only
+  // changes when the admin edits it (does not auto-grow).
+  maxUses     Int
   status      AssessmentStatus @default(collecting)
   deadline    DateTime
   closedAt    DateTime?
@@ -103,7 +110,9 @@ model Department {
 model Respondent {
   id           String      @id @default(uuid())
   assessmentId String
-  code         String      @unique
+  // Per-respondent code is gone — see decisions log reversal 2026-04-29.
+  // Identity comes from the (id, browser localStorage) pairing during the
+  // respondent flow. The cohort code lives on Assessment.
   name         String?
   departmentId String?
   level        Level?
@@ -119,6 +128,7 @@ model Respondent {
 
   @@index([assessmentId])
   @@index([departmentId])
+  @@index([assessmentId, submittedAt])
 }
 
 model Response {
