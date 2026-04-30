@@ -39,3 +39,40 @@ export function clearRespondentId(assessmentCode: string): void {
     // ignore
   }
 }
+
+/**
+ * Walk localStorage and return the FIRST tea_respondent_<CODE> entry.
+ * Used by the take-flow pages (demographics, question, done) to find
+ * the in-flight respondent without knowing which assessment code it
+ * belongs to. There should only ever be one in-flight respondent at a
+ * time per browser, so first-found is correct.
+ */
+export function findInFlightRespondentId(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith(STORAGE_PREFIX)) {
+        return window.localStorage.getItem(key)
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+/** Clears every tea_respondent_* entry from localStorage. */
+export function clearAllRespondentIds(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const keysToRemove: string[] = []
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith(STORAGE_PREFIX)) keysToRemove.push(key)
+    }
+    for (const key of keysToRemove) window.localStorage.removeItem(key)
+  } catch {
+    // ignore
+  }
+}

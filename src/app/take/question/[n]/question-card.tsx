@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LIKERT_LABELS, LIKERT_VALUES, I_DONT_KNOW_LABEL } from '@/data/constants'
+import { findInFlightRespondentId } from '@/lib/take-storage'
 
 interface QuestionCardProps {
   position: number
@@ -21,10 +22,14 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Selection | null>(null)
   const [saving, setSaving] = useState(false)
+  // Q30 only: while the submit network call is in flight, lock the
+  // tiles + show "Submitting…" so the user doesn't double-click and
+  // hit a confusing already_submitted error after a successful submit.
+  const [submitting, setSubmitting] = useState(false)
 
   // Load respondent id + the existing answer for THIS question.
   useEffect(() => {
-    const id = findRespondentIdInStorage()
+    const id = findInFlightRespondentId()
     if (!id) {
       setLoadError('We could not find your in-flight session. Please re-enter your access code.')
       setLoading(false)
@@ -89,6 +94,7 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
     if (position >= total) {
       // Last question: submit immediately. No review screen.
       if (!respondentId) return
+      setSubmitting(true)
       try {
         const res = await fetch(`/api/respondents/${respondentId}/submit`, { method: 'POST' })
         if (!res.ok) {
@@ -97,11 +103,14 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
           // unanswered question earlier in the flow.
           const body = (await res.json().catch(() => null)) as { error?: string } | null
           setLoadError(humanizeSubmitError(body?.error))
+          setSubmitting(false)
           return
         }
         router.push('/take/done')
+        // Don't unset submitting — the navigation away handles teardown.
       } catch {
         setLoadError('Could not submit. Please try again.')
+        setSubmitting(false)
       }
     } else {
       router.push(`/take/question/${position + 1}`)
@@ -180,7 +189,7 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
               key={v}
               type="button"
               onClick={() => onSelect(v)}
-              disabled={saving}
+              disabled={saving || submitting}
               className={`flex flex-col items-center gap-1 rounded-md border px-3 py-4 text-center text-sm transition disabled:cursor-not-allowed ${
                 isSelected
                   ? 'border-ink bg-ink text-canvas'
@@ -217,17 +226,24 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
         </button>
       </div>
 
-      {/* Footer: Back */}
+      {/* Footer: Back + status hint */}
       <div className="flex items-center justify-between border-t border-canvas-border pt-4">
         <button
           type="button"
           onClick={onBack}
-          className="text-sm font-medium text-ink-muted transition hover:text-ink"
+          disabled={submitting}
+          className="text-sm font-medium text-ink-muted transition hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
         >
           ← Back
         </button>
         <span className="text-xs text-ink-subtle">
-          {saving ? 'Saving…' : selected !== null ? 'Saved' : ' '}
+          {submitting
+            ? 'Submitting…'
+            : saving
+              ? 'Saving…'
+              : selected !== null
+                ? 'Saved'
+                : ' '}
         </span>
       </div>
     </div>
@@ -249,17 +265,3 @@ function humanizeSubmitError(code: string | undefined): string {
   }
 }
 
-function findRespondentIdInStorage(): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i)
-      if (key && key.startsWith('tea_respondent_')) {
-        return window.localStorage.getItem(key)
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return null
-}

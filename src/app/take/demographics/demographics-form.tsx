@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Level, TenureBand } from '@prisma/client'
 import { LEVELS, LEVEL_LABELS, TENURE_BANDS, TENURE_LABELS } from '@/data/constants'
+import { findInFlightRespondentId } from '@/lib/take-storage'
 
 interface DepartmentOption {
   id: string
@@ -44,7 +45,7 @@ export function DemographicsForm() {
   // On mount: read respondentId out of localStorage (we don't know which
   // assessment-code key it's under without trying), then fetch state.
   useEffect(() => {
-    const respondentId = findRespondentIdInStorage()
+    const respondentId = findInFlightRespondentId()
     if (!respondentId) {
       setLoadError('We could not find your in-flight session. Please re-enter your access code.')
       setLoading(false)
@@ -256,19 +257,3 @@ function Field({ label, required, children }: { label: string; required?: boolea
   )
 }
 
-// Walk localStorage to find ANY tea_respondent_<CODE> entry. There
-// should be exactly one in-flight at a time on this device.
-function findRespondentIdInStorage(): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i)
-      if (key && key.startsWith('tea_respondent_')) {
-        return window.localStorage.getItem(key)
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return null
-}

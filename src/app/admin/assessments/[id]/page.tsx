@@ -127,7 +127,7 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
                   <th className="px-4 py-3">Level</th>
                   <th className="px-4 py-3">Tenure</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Submitted</th>
+                  <th className="px-4 py-3">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-canvas-border">
