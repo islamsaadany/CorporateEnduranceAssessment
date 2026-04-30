@@ -124,4 +124,15 @@ npx tsc --noEmit     # TypeScript only (no DB needed)
 
 ## Status
 
-**Phase 1 — Foundation** is in progress. See [`Plan & Progress/progress.md`](./Plan%20%26%20Progress/progress.md) for current state and `execution-plan.md` for the full phased roadmap.
+**Phases 0–5 complete.** What's live:
+
+- ✅ Documentation foundation (Plan & Progress, product-spec, root docs)
+- ✅ Next.js 16 + Tailwind scaffold + Prisma schema + seed
+- ✅ Admin auth (NextAuth v5 email/password) + dashboard + role gating
+- ✅ Assessment lifecycle (create with cohort code + maxUses cap, edit with department-in-use protection, manual close)
+- ✅ Respondent flow (`/take` → code → welcome → demographics → 30 questions with 1–4 + "I don't know" → auto-submit on Q30 → done)
+- ✅ Hourly closure cron (flips collecting → closed past deadline)
+
+**Next:** Phase 6 — live numerical report (`/admin/assessments/[id]/results`): aggregated pillar/capability scores, ≥3 anonymity guardrail, filter UI, comparison view.
+
+See [`Plan & Progress/progress.md`](./Plan%20%26%20Progress/progress.md) for the live tracker and [`Plan & Progress/execution-plan.md`](./Plan%20%26%20Progress/execution-plan.md) for the decisions log + phased roadmap.

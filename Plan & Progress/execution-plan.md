@@ -117,45 +117,48 @@ CorporateEnduranceAssessment/
 
 Each phase ends with a working, testable slice. After each phase, run `npx tsc --noEmit` and `npm run build`.
 
-### Phase 0 — Documentation (current phase)
+### Phase 0 — Documentation ✅
 - [x] Alignment captured in this file
-- [ ] `product-spec/` folder authored
-- [ ] `Plan & Progress/progress.md` skeleton ready
-- [ ] User reviews `product-spec/` and approves
-- [ ] `CLAUDE.md` rewritten
-- [ ] `PROJECT_DETAILS.md` rewritten
-- [ ] `REUSABLE_PATTERNS.md` updated with applicability notes
-- [ ] Original `ENDURANCE_ASSESSMENT_SPEC.md` replaced with index file
+- [x] `product-spec/` folder authored
+- [x] `Plan & Progress/progress.md` skeleton ready
+- [x] User reviews `product-spec/` and approves
+- [x] `CLAUDE.md` rewritten
+- [x] `PROJECT_DETAILS.md` rewritten
+- [x] `REUSABLE_PATTERNS.md` updated with applicability notes
+- [x] Original `ENDURANCE_ASSESSMENT_SPEC.md` replaced with index file
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation ✅
 - Next.js 16 + Tailwind project scaffold
-- Prisma schema (admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports)
-- Neon DB connected, schema pushed
-- Seed script: super admin user + sample assessment with sample responses for testing
+- Prisma schema (8 tables: Admin, Assessment, Department, Respondent, Response, Settings, GeneratedReport, AuditLog)
+- Neon DB schema pushed via `prisma/sql/000_initial_schema.sql`
+- Seed: super admin + Settings singleton + sample assessment with 5 respondents (3 submitted, including some "I don't know" answers)
 
-### Phase 2 — Admin auth + dashboard
-- NextAuth email/password
-- `/admin/login` and session handling
-- `/admin/dashboard` listing active + closed assessments
-- Admin role gating (super_admin vs. admin)
+### Phase 2 — Admin auth + dashboard ✅
+- NextAuth v5 credentials provider with bcrypt + Zod
+- `/admin/login` + session handling, JWT augmented with `id` + `role`
+- `/admin/dashboard` listing collecting + closed assessments
+- Role gating via `proxy.ts` + `requireAdmin` / `requireSuperAdmin` server helpers
 
-### Phase 3 — Assessment lifecycle (admin side)
-- `/admin/assessments/new` — form with departments, deadline, respondent count
-- 6-char code generation per respondent (collision-checked)
-- Admin sees codes per respondent, can copy
-- `/admin/assessments/[id]` detail page with respondent status table
+### Phase 3 — Assessment lifecycle (admin side) ✅
+- `/admin/assessments/new` — form with departments, deadline, **maxUses** (cap on demographics-completed respondents)
+- **One cohort code per assessment** (reversed from per-respondent — see decisions log 2026-04-29)
+- Cohort code visible/copyable on `/admin/assessments/[id]` detail page
+- `/admin/assessments/[id]` detail page (capacity strip, departments, respondent table, edit + close buttons)
+- `/admin/assessments/[id]/edit` page (clientName, deadline, departments add/remove with in-use protection, maxUses with floor)
 
-### Phase 4 — Respondent flow (happy path)
-- `/take` code entry
-- `/take/welcome` with privacy disclosure
-- `/take/demographics` (department / level / tenure / optional name)
-- `/take/question/[1..30]` Typeform-style flow
-- `/take/review` and `/take/done` confirmation
-- localStorage progress persistence + server-side answer save
+### Phase 4 — Respondent flow (happy path) ✅
+- `/take` code entry (case-insensitive)
+- `/take/welcome` with privacy disclosure + framing reminder
+- `/take/demographics` (name **required**, department dropdown, 4-tier Level, banded TenureBand)
+- `/take/question/[1..30]` Typeform-style with 1–4 tiles + "I don't know" + keyboard 1–4/0 + Back
+- **Q30 auto-submits** with explicit Submitting indicator (no review screen)
+- `/take/done` with localStorage cleanup
+- localStorage `tea_respondent_<UPPERCASED_CODE>` for resume
 
-### Phase 5 — Closure cron + status logic
-- Hourly Vercel Cron job flips `status: collecting → closed` past deadline
-- Respondent attempts to submit post-closure → 410 response
+### Phase 5 — Closure cron + status logic ✅
+- Hourly Vercel Cron via `vercel.json` + `/api/cron/closure` (Bearer auth via CRON_SECRET); audited as `trigger:'cron'`
+- Manual close via `POST /api/assessments/[id]/close` with admin-confirm UI; audited as `trigger:'manual'`
+- All 4 respondent routes 410 on closed assessment
 
 ### Phase 6 — Numerical report (live)
 - `/admin/assessments/[id]/results` with Summary + Capability Profile + Focus Areas + Anonymized Individuals tabs

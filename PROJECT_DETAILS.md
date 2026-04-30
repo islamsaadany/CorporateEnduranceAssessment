@@ -3,7 +3,15 @@
 > Technical reference for engineers and Claude Code sessions.
 > Product/content reference lives in `product-spec/`. Working guidelines live in `CLAUDE.md`. Decisions log lives in `Plan & Progress/execution-plan.md`.
 
-**Status:** Phase 0 — Documentation. No application code exists yet. The schema, routes, and structure below describe the **target state** for Phase 1 onwards.
+**Status:** Phases 0–5 complete. Phase 6 (live numerical report) is next. Built code lives in `src/`, `prisma/`. Several decisions changed during implementation — see the **Decisions log** in `Plan & Progress/execution-plan.md` for the canonical reasoning behind anything that disagrees with an early draft.
+
+> **Heads up for new sessions.** A few things changed from the original plan and are easy to miss:
+> 1. **Cohort code, not per-respondent code.** One `Assessment.code` shared by all respondents, plus `Assessment.maxUses` as a hard cap. `Respondent.code` does **not** exist. (Reversal logged 2026-04-29.)
+> 2. **1–4 Likert + "I don't know"**, not 1–5. `Response.value` is `Int?` — `NULL` means "I don't know" and is excluded from scoring. (Logged 2026-04-29.)
+> 3. **4-tier `Level` enum**, not 5. Values: `individual_contributor`, `team_leader`, `manager`, `senior_leader`. Display labels are slash-joined merged names. (Logged 2026-04-29.)
+> 4. **`Respondent.demographicsCompletedAt`** distinguishes "real" respondents from ghost rows (validated-then-bounced). Cap checks + admin UI filter on this column. (Logged 2026-04-29.)
+> 5. **No respondent review screen.** Selecting an answer for question 30 auto-submits.
+> 6. **Capability names match `product-spec/01`** (Decision Velocity / Market & Signal Intelligence / etc.) — the early draft's names (Sensing / Decisiveness / etc.) are gone.
 
 ---
 
@@ -27,68 +35,95 @@
 
 ---
 
-## Directory Structure (target state)
+## Directory Structure (actual)
+
+Built and on disk. Files marked *(Phase N+)* don't exist yet — the directory layout calls them out so future sessions know where to put them.
 
 ```
 CorporateEnduranceAssessment/
 ├── Plan & Progress/
-│   ├── execution-plan.md            # Single source of truth for product alignment
+│   ├── execution-plan.md            # Source of truth for alignment + decisions log
 │   └── progress.md                  # Live execution tracker
 ├── product-spec/                    # Product content + behavior (16 files, non-technical)
 ├── prisma/
-│   ├── schema.prisma
-│   └── seed.ts                      # Super admin + sample assessment with sample responses
+│   ├── schema.prisma                # 8 models + 5 enums (see § Schema below)
+│   ├── seed.ts                      # Super admin + Settings + sample assessment
+│   └── sql/                         # Hand-runnable SQL files for Neon SQL editor
+│       ├── README.md
+│       ├── 000_initial_schema.sql   # Auto-generated from schema.prisma
+│       ├── 001_seed_sample_data.sql # Auto-generated from seed.ts via gen-seed-sql.mjs
+│       ├── 002_cohort_codes.sql     # Migration: per-respondent → cohort codes
+│       ├── 003_likert_scale.sql     # Migration: 1–5 Likert → 1–4 + "I don't know"
+│       └── 004_levels_and_demographics.sql  # Migration: 4-tier Level + demographicsCompletedAt
+├── scripts/
+│   └── gen-seed-sql.mjs             # Emits 001_seed_sample_data.sql from seed.ts logic
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                 # Landing
+│   │   ├── page.tsx                 # Landing — CTAs to /take and /admin/login
 │   │   ├── layout.tsx
-│   │   ├── globals.css
-│   │   ├── take/                    # Respondent flow
+│   │   ├── globals.css              # @tailwind base/components/utilities + body bg
+│   │   ├── take/                    # Respondent flow (no admin chrome)
+│   │   │   ├── layout.tsx           # Minimal frame
 │   │   │   ├── page.tsx             # Code entry
-│   │   │   ├── welcome/page.tsx
-│   │   │   ├── demographics/page.tsx
-│   │   │   ├── question/[n]/page.tsx
-│   │   │   ├── review/page.tsx
-│   │   │   └── done/page.tsx
+│   │   │   ├── code-entry-form.tsx  # Client form, calls /api/respondents/validate
+│   │   │   ├── welcome/page.tsx     # Privacy disclosure
+│   │   │   ├── demographics/
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── demographics-form.tsx  # Client; loads via /api/respondents/[id]
+│   │   │   ├── question/[n]/
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── question-card.tsx      # Client; tiles + IDK + Q30 auto-submit
+│   │   │   └── done/
+│   │   │       ├── page.tsx
+│   │   │       └── done-cleanup.tsx       # Clears localStorage tea_respondent_*
 │   │   ├── admin/
-│   │   │   ├── login/page.tsx
-│   │   │   ├── dashboard/page.tsx
-│   │   │   ├── assessments/
-│   │   │   │   ├── new/page.tsx
-│   │   │   │   └── [id]/
-│   │   │   │       ├── page.tsx     # Detail (status table)
-│   │   │   │       ├── results/page.tsx
-│   │   │   │       └── activity/page.tsx
-│   │   │   ├── settings/ai/page.tsx # Super admin only
-│   │   │   └── admins/page.tsx      # Super admin only
+│   │   │   ├── layout.tsx           # Header nav with super-admin-only links
+│   │   │   ├── page.tsx             # Redirects to /admin/dashboard
+│   │   │   ├── login/
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── login-form.tsx   # Client; signIn from next-auth/react
+│   │   │   ├── dashboard/page.tsx   # Lists Collecting + Closed assessments
+│   │   │   └── assessments/
+│   │   │       ├── new/
+│   │   │       │   ├── page.tsx
+│   │   │       │   └── new-assessment-form.tsx
+│   │   │       └── [id]/
+│   │   │           ├── page.tsx           # Detail: cohort code card + capacity strip + table
+│   │   │           ├── copy-button.tsx
+│   │   │           ├── close-button.tsx   # "Close now" with confirm
+│   │   │           └── edit/
+│   │   │               ├── page.tsx
+│   │   │               └── edit-assessment-form.tsx
+│   │   │   # Phase 6+: results/, activity/, settings/ai/, admins/
 │   │   └── api/
-│   │       ├── auth/[...nextauth]/  # NextAuth handler
+│   │       ├── auth/[...nextauth]/route.ts
 │   │       ├── assessments/
+│   │       │   ├── route.ts                  # POST create
+│   │       │   └── [id]/
+│   │       │       ├── route.ts              # PATCH edit
+│   │       │       └── close/route.ts        # POST manual close
 │   │       ├── respondents/
-│   │       ├── ai/
-│   │       └── cron/closure/
+│   │       │   ├── validate/route.ts         # POST validate cohort code, create/resume Respondent
+│   │       │   └── [id]/
+│   │       │       ├── route.ts              # GET full state for take flow
+│   │       │       ├── demographics/route.ts # PATCH demographics
+│   │       │       ├── responses/route.ts    # PATCH upsert answers
+│   │       │       └── submit/route.ts       # POST finalize (sets submittedAt)
+│   │       └── cron/closure/route.ts         # Hourly cron — flips deadline-passed assessments to closed
 │   ├── lib/
-│   │   ├── prisma.ts                # Prisma client singleton
-│   │   ├── auth.ts                  # NextAuth config + role helpers
-│   │   ├── scoring.ts               # Pillar/capability/spread aggregation, focus-area selection
-│   │   ├── filters.ts               # Filter signature + ≥3-respondent guardrail
-│   │   ├── codes.ts                 # 6-char alphanumeric generator (no 0/O/1/I/L), collision check
-│   │   ├── crypto.ts                # AES-256-GCM encrypt/decrypt
-│   │   ├── audit.ts                 # Append-only audit log helper
-│   │   ├── ai/
-│   │   │   ├── index.ts             # Provider abstraction
-│   │   │   ├── gemini.ts
-│   │   │   ├── claude.ts
-│   │   │   ├── openai.ts
-│   │   │   ├── prompt.ts            # System + user prompt builders (provider-neutral)
-│   │   │   └── cache.ts             # DB-backed cache helpers
-│   │   └── pdf-template.tsx         # React-PDF template
-│   ├── components/                  # Shared React components (admin + respondent)
+│   │   ├── prisma.ts                # PrismaClient singleton
+│   │   ├── auth.ts                  # NextAuth v5 config; module augmentation for session.user.role
+│   │   ├── admin-guard.ts           # requireAdmin() / requireSuperAdmin() server helpers
+│   │   ├── codes.ts                 # generateUniqueAssessmentCode() — single cohort code per assessment
+│   │   ├── audit.ts                 # logAdminAction() / logRespondentLifecycle()
+│   │   └── take-storage.ts          # SSR-safe localStorage helpers for /take
+│   ├── proxy.ts                     # Next 16's renamed middleware — gates /admin/*
 │   └── data/
-│       ├── types.ts
-│       ├── constants.ts             # Pillar/capability metadata, LEVELS, TENURE_BANDS, BAND_THRESHOLDS
-│       └── questions.ts             # 30 statements with (pillar, capability, angle) mapping
-├── ui-versions/                     # Snapshots before UI edits (rollback log)
+│       ├── types.ts                 # PillarKey, CapabilityKey, ParsedFilter, AggregatedResults, AiReportOutput, AnswerValue
+│       ├── constants.ts             # Pillar/capability metadata, LEVELS (4), TENURE_BANDS (5), BAND_THRESHOLDS (quartiles), LIKERT_VALUES, MIN_RESPONDENTS_FOR_VIEW
+│       └── questions.ts             # 30 verbatim statements + helpers (questionAtPosition, QUESTIONS_BY_ID)
+├── public/                          # (.gitkeep — placeholder for Vercel/Next)
+├── vercel.json                      # framework: nextjs + crons schedule
 ├── CLAUDE.md
 ├── PROJECT_DETAILS.md               # This file
 ├── REUSABLE_PATTERNS.md
@@ -130,24 +165,23 @@ enum AdminRole {
 
 ```prisma
 model Assessment {
-  id           String   @id @default(uuid())
-  clientName   String                              // Free text, e.g. "Acme Corp"
+  id           String           @id @default(uuid())
+  clientName   String
+  // Cohort code: ONE code per assessment, shared by every respondent.
+  // 6 chars over an alphabet that excludes 0/O/1/I/L. Stored uppercased.
+  code         String           @unique
+  // Hard cap on demographics-completed respondents. Set explicitly by
+  // the admin at creation; only changes via the edit page (no auto-grow).
+  maxUses      Int
   status       AssessmentStatus @default(collecting) // collecting | closed
-  deadline     DateTime                            // Hourly cron flips to closed past this
+  deadline     DateTime
   closedAt     DateTime?
   createdById  String
-  createdBy    Admin    @relation("CreatedBy", fields: [createdById], references: [id])
-  departments  Department[]
-  respondents  Respondent[]
-  generatedReports GeneratedReport[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
-enum AssessmentStatus {
-  collecting
-  closed
-}
+enum AssessmentStatus { collecting closed }
 ```
 
 ### Department
@@ -156,69 +190,76 @@ enum AssessmentStatus {
 model Department {
   id           String   @id @default(uuid())
   assessmentId String
-  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  name         String                              // e.g. "Sales"
+  name         String
   createdAt    DateTime @default(now())
-  respondents  Respondent[]
   @@unique([assessmentId, name])
 }
 ```
 
-**Rule:** a department row cannot be deleted once any `Respondent` references it. Enforced in the admin "remove department" endpoint.
+**Rule:** a department row cannot be deleted once any `Respondent` references it (enforced in `PATCH /api/assessments/[id]` — returns 409 with the offending names).
 
 ### Respondent
 
 ```prisma
 model Respondent {
-  id              String   @id @default(uuid())
-  assessmentId    String
-  assessment      Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  code            String   @unique                 // 6-char alphanumeric, no 0/O/1/I/L
-  name            String?                          // Optional, set during demographics step
-  departmentId    String?
-  department      Department? @relation(fields: [departmentId], references: [id])
-  level           Level?
-  tenure          TenureBand?
-  startedAt       DateTime?                        // Set on first /take/welcome view
-  submittedAt     DateTime?                        // Set on /take/done; locks editing
-  responses       Response[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String      @id @default(uuid())
+  assessmentId String
+  // No per-respondent code — see decisions log "Codes (REVERSAL)" 2026-04-29.
+  // Identity: (id, browser localStorage). Cohort code lives on Assessment.
+  // The DB column for `name` stays nullable because (a) a respondent row
+  // exists between code-validation and demographics-save, and (b) older
+  // sample data may have NULLs. The API (Zod) enforces non-empty name
+  // when demographics are saved.
+  name                    String?
+  departmentId            String?
+  level                   Level?
+  tenure                  TenureBand?
+  // Set when demographics are first saved. Distinguishes "real"
+  // respondents from ghost rows (validated then bounced). Cap checks +
+  // admin UI filter on this column.
+  demographicsCompletedAt DateTime?
+  startedAt               DateTime?
+  submittedAt             DateTime?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  @@index([assessmentId])
+  @@index([departmentId])
+  @@index([assessmentId, submittedAt])
+  @@index([assessmentId, demographicsCompletedAt])
 }
 
+// 4 merged tiers — see product-spec/09_demographics.md.
 enum Level {
-  executive
-  senior_leader
-  manager
-  team_lead
-  individual_contributor
+  individual_contributor // "Individual Contributor / Early Career"
+  team_leader            // "Team Leader / Supervisor"
+  manager                // "Manager / Department Head"
+  senior_leader          // "Senior Leader / Executive"
 }
 
-enum TenureBand {
-  lt_1y
-  y1_3
-  y4_7
-  y8_15
-  gt_15y
-}
+enum TenureBand { lt_1y y1_3 y4_7 y8_15 gt_15y }
 ```
 
 ### Response
 
 ```prisma
 model Response {
-  id            String   @id @default(uuid())
-  respondentId  String
-  respondent    Respondent @relation(fields: [respondentId], references: [id], onDelete: Cascade)
-  questionId    String                              // e.g. "1a", "1b", ..., "15b" — matches src/data/questions.ts
-  value         Int                                 // 1–5 Likert
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  respondentId String
+  questionId   String                              // e.g. "1a", "1b", … "15b" — matches src/data/questions.ts
+  // 1..4 if rated, NULL if respondent picked "I don't know".
+  // Row existence = answered. NULL = explicit non-answer (still counts
+  // toward submission completeness, but excluded from scoring).
+  value        Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
   @@unique([respondentId, questionId])
+  @@index([questionId])
 }
 ```
 
-**Constraint:** `value` is application-validated to 1–5. Updates only allowed when `Respondent.submittedAt IS NULL` (during collection) or by an admin via the post-closure edit endpoint.
+**Constraint:** `value` is `Int?` with a Postgres CHECK `(value IS NULL OR value BETWEEN 1 AND 4)`. Updates only allowed when `Respondent.submittedAt IS NULL` (during collection); admin post-closure edits flow through a separate route in Phase 9.
 
 ### Settings
 
@@ -286,42 +327,43 @@ model AuditLog {
 
 ## API Routes
 
-All admin routes are gated by NextAuth session + role check. Respondent routes are gated by code (and, where applicable, by `Respondent.submittedAt IS NULL`). Cron routes require the `CRON_SECRET` header.
+All admin routes are gated by NextAuth session via `src/proxy.ts`. Respondent routes are unauthenticated — knowledge of the cohort code (or the respondent UUID) is the credential. The cron route requires the `CRON_SECRET` Bearer header.
+
+**Status legend:** ✅ implemented · ⏳ planned for the marked phase
 
 ### Admin — Assessments
-| Method | Path | Purpose |
-|--------|------|---------|
-| `POST` | `/api/assessments` | Create assessment (clientName, deadline, departments[], respondentCount). Generates respondent rows + 6-char codes. |
-| `GET` | `/api/assessments` | List assessments visible to the caller (all admins see all). |
-| `GET` | `/api/assessments/[id]` | Detail: assessment + respondents (status only). |
-| `PATCH` | `/api/assessments/[id]` | Edit deadline, add a department, close manually. |
-| `POST` | `/api/assessments/[id]/respondents` | Append additional respondents (still during collection). |
-| `GET` | `/api/assessments/[id]/results?filter=…` | Aggregated numerical results for the active filter. Honors `≥3` guardrail. |
-| `POST` | `/api/assessments/[id]/report?filter=…` | Generate AI report for the active filter. Watermarked draft if pre-closure. Caches into `GeneratedReport`. |
-| `GET` | `/api/assessments/[id]/report?filter=…` | Fetch cached AI report (cache miss → 404, client offers "Generate"). |
-| `POST` | `/api/assessments/[id]/report/pdf?filter=…` | Render PDF for the active filtered view (uses cached AI output). |
-| `GET` | `/api/assessments/[id]/activity` | Audit log entries scoped to this assessment. |
+| Status | Method | Path | Purpose |
+|---|--------|------|---------|
+| ✅ | `POST` | `/api/assessments` | Create. Body: `{ clientName, deadline, departments[], maxUses }`. Generates ONE cohort code via `generateUniqueAssessmentCode()`. No bulk respondent rows. Audit-logs `assessment.create` (without the code in metadata — the code is a credential). |
+| ✅ | `PATCH` | `/api/assessments/[id]` | Edit `clientName / deadline / departments / maxUses`. Body: `{ clientName, deadline, departments: { keep: [], add: [] }, maxUses }`. Returns 409 `department_in_use` if removal targets a department that any respondent has chosen. `maxUses` cannot drop below the demographics-completed count. |
+| ✅ | `POST` | `/api/assessments/[id]/close` | Manual "Close now" — same DB effect as the cron, but `metadata.trigger = 'manual'` and `actorAdminId` set. 409 `already_closed` if status is already `closed`. |
+| ⏳ Phase 6 | `GET` | `/api/assessments/[id]/results?filter=…` | Aggregated numerical results for the active filter. Honors ≥3 guardrail. |
+| ⏳ Phase 7 | `POST` / `GET` | `/api/assessments/[id]/report?filter=…` | Generate / fetch AI report. Watermarked draft if pre-closure. Caches into `GeneratedReport`. |
+| ⏳ Phase 8 | `POST` | `/api/assessments/[id]/report/pdf?filter=…` | React-PDF render of the filtered view. |
+| ⏳ Phase 9 | `GET` | `/api/assessments/[id]/activity` | Audit log entries scoped to this assessment. |
 
-### Admin — Respondents (post-closure edit only)
-| Method | Path | Purpose |
-|--------|------|---------|
-| `PATCH` | `/api/respondents/[id]/answers` | Edit individual answers post-closure. Triggers cache invalidation for the assessment (with warning). Audit-logged. |
-| `PATCH` | `/api/respondents/[id]/demographics` | Edit demographics post-closure. Same invalidation + audit behavior. |
+### Respondent (in-flow; unauthenticated)
+| Status | Method | Path | Purpose |
+|---|--------|------|---------|
+| ✅ | `POST` | `/api/respondents/validate` | Validate cohort code (uppercased). 404 invalid · 410 closed · 403 full · 200 with `{ respondentId, assessmentId, clientName, departments, resumed }`. Resume: caller passes their localStorage `respondentId`; if it belongs to the same assessment and isn't submitted, it's reused. Otherwise a new `Respondent` row is created (cap is checked at this point AND at first demographics save). Audit-logs `respondent.start`. |
+| ✅ | `GET` | `/api/respondents/[id]` | Full take-flow state: `{ respondent: {…}, assessment: {…}, answersByQuestionId: {…} }`. Used by demographics, question, and review pages. `value === undefined` → not answered; `null` → "I don't know"; `1..4` → rated. |
+| ✅ | `PATCH` | `/api/respondents/[id]/demographics` | Body: `{ name, departmentId, level, tenure }`. Name required (Zod min(1)). Cross-checks the department belongs to this assessment. Stamps `demographicsCompletedAt` on first successful save. Re-checks cap on first save. 410 if already submitted or closed. |
+| ✅ | `PATCH` | `/api/respondents/[id]/responses` | Body: `{ answers: [{ questionId, value }, …] }`. value = `1..4` rated or `null` "I don't know". Single transaction upsert. 410 if already submitted or closed. Rejects unknown question IDs. |
+| ✅ | `POST` | `/api/respondents/[id]/submit` | Demographics must be set; response row count must be ≥ 30. Sets `submittedAt`, audit-logs `respondent.submit`. 410 if already submitted or closed. |
 
-### Admin — Settings + Admins (super admin only)
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` / `PATCH` | `/api/settings/ai` | Read / update active provider + per-provider API keys (encrypted at rest). |
-| `POST` | `/api/settings/ai/test` | Round-trip a tiny test prompt against the configured provider; returns ok/error. |
-| `GET` / `POST` | `/api/admins` | List / create regular admins. |
-| `PATCH` | `/api/admins/[id]` | Deactivate admin. (Cannot deactivate the last super admin.) |
+### Auth + Cron
+| Status | Method | Path | Purpose |
+|---|--------|------|---------|
+| ✅ | All | `/api/auth/[...nextauth]` | NextAuth credentials provider handler. |
+| ✅ | `POST` (and `GET` alias) | `/api/cron/closure` | Hourly Vercel Cron (`0 * * * *`). Auth: `Authorization: Bearer ${CRON_SECRET}`. Finds `status='collecting' AND deadline <= now`, flips each to closed inside a per-row transaction, audit-logs `assessment.close` with `metadata.trigger = 'cron'`. Idempotent. |
 
-### Respondent
-| Method | Path | Purpose |
-|--------|------|---------|
-| `POST` | `/api/respondents/validate` | Validate code → returns minimal session payload + assessment status. Rate-limited (5/min/IP). |
-| `POST` | `/api/respondents/[id]/start` | Sets `startedAt`, logs `respondent.start`. |
-| `PATCH` | `/api/respondents/[id]/demographics` *(in-flow)* | Save demographics during the respondent flow. Distinct route from admin edit; only allowed when `submittedAt IS NULL`. |
+### Phase 7+ (super-admin only) — not yet built
+| Status | Method | Path | Purpose |
+|---|--------|------|---------|
+| ⏳ Phase 7 | `GET` / `PATCH` | `/api/settings/ai` | Provider + AES-256 encrypted API key. |
+| ⏳ Phase 7 | `POST` | `/api/settings/ai/test` | Round-trip test prompt. |
+| ⏳ Phase 9 | `PATCH` | `/api/respondents/[id]/answers` | Admin post-closure edit; triggers cache invalidation. |
+| ⏳ Phase 10 | `GET` / `POST` / `PATCH` | `/api/admins` | List / create / deactivate admins. |
 | `PATCH` | `/api/respondents/[id]/responses` | Upsert one or more answers. Only when `submittedAt IS NULL` and assessment is `collecting`. |
 | `POST` | `/api/respondents/[id]/submit` | Finalize: sets `submittedAt`, logs `respondent.submit`. Subsequent calls return 410. |
 
@@ -357,7 +399,63 @@ export function aggregateForFilter(
 
 **Rule reference:** see `product-spec/03_scoring_and_bands.md` for the math, band thresholds, and tie-break rule. **Do not** re-document those rules here — change the spec and the implementation together.
 
-### `src/lib/filters.ts`
+### `src/lib/codes.ts` ✅
+```ts
+export function generateCode(): string                          // 6 chars, alphabet excludes 0/O/1/I/L
+export async function generateUniqueAssessmentCode(): Promise<string>  // retries up to 10× against unique Assessment.code index
+```
+**Cohort-code model:** one code per assessment, shared by all respondents. There is no per-respondent generator anymore.
+
+### `src/lib/audit.ts` ✅
+```ts
+export type AdminAction = 'assessment.create' | 'assessment.edit' | 'assessment.close' | …
+export type RespondentAction = 'respondent.start' | 'respondent.submit'
+export async function logAdminAction({ actorAdminId, assessmentId?, action, metadata? }): Promise<void>
+export async function logRespondentLifecycle({ respondentId, assessmentId, action, metadata? }): Promise<void>
+```
+Metadata is `Prisma.InputJsonValue`. Append-only. **Never logs the value of an individual answer** — only that something happened. The cron close route writes `metadata.trigger = 'cron'` (no actorAdminId); the manual close route writes `metadata.trigger = 'manual'` with the actor.
+
+### `src/lib/auth.ts` ✅
+NextAuth v5 credentials provider. JWT session strategy. Module augmentation adds `id` + `role: AdminRole` to both `Session.user` and `@auth/core/jwt`'s `JWT`. The `authorized` callback gates `/admin/*` (except `/admin/login`).
+
+### `src/lib/admin-guard.ts` ✅
+```ts
+export async function requireAdmin(): Promise<{ id, email, name, role }>     // 401 → redirect /admin/login
+export async function requireSuperAdmin(): Promise<…>                          // non-super → redirect /admin/dashboard
+```
+
+### `src/proxy.ts` ✅
+Next 16's renamed middleware. Matcher `['/admin/:path*', '/api/admin/:path*']`. Redirects unauthed visitors to `/admin/login?callbackUrl=…`; bounces already-authed visitors away from the login page back to `/admin/dashboard`.
+
+### `src/lib/take-storage.ts` ✅
+SSR-safe localStorage helpers. Storage key shape: `tea_respondent_<UPPERCASED_ASSESSMENT_CODE>` → respondentId.
+```ts
+saveRespondentId(code, respondentId)
+loadRespondentId(code): string | null
+clearRespondentId(code)
+findInFlightRespondentId(): string | null   // walks localStorage, returns first tea_respondent_* match
+clearAllRespondentIds()
+```
+
+### `src/lib/scoring.ts` ⏳ Phase 6
+Pure functions, no DB access. Inputs are typed arrays of `{ respondentId, questionId, value }` plus the active filter; outputs are aggregates the API route serializes to JSON.
+```ts
+export function aggregateForFilter(
+  responses: Response[],
+  respondents: Respondent[],
+  filter: ParsedFilter
+): {
+  sampleSize: number
+  overall: number
+  pillars:    Record<PillarKey, number>
+  capabilities: Record<CapabilityKey, { score: number; spread: number; ratedCount: number }>
+  focusAreas: CapabilityKey[]   // top-5 weakest, see product-spec/03 for tie-break rule
+  bands:      { overall: BandKey; pillars: …; capabilities: … }
+}
+```
+**NULL handling:** `Response.value === null` ("I don't know") is excluded from every mean. A capability needs ≥3 rated answers across the filter to display a score (else "Insufficient data" — per-capability anonymity floor).
+
+### `src/lib/filters.ts` ⏳ Phase 6
 ```ts
 export function parseFilter(qs: URLSearchParams): ParsedFilter
 export function filterSignature(f: ParsedFilter): string  // canonical sorted string used as cache key
@@ -365,22 +463,10 @@ export function applyFilter(respondents: Respondent[], f: ParsedFilter): Respond
 export function meetsAnonymityGuardrail(filtered: Respondent[]): boolean  // length >= 3
 ```
 
-The `≥3` guardrail is enforced **in this module** and re-checked in every route that returns data. See `product-spec/11_anonymity_and_privacy.md`.
+### `src/lib/crypto.ts` ⏳ Phase 7
+AES-256-GCM. `encrypt(plaintext: string): Buffer` and `decrypt(buf: Buffer): string`. Master key from `SETTINGS_ENCRYPTION_KEY`. Used only for `Settings.encryptedApiKey*` columns.
 
-### `src/lib/codes.ts`
-6-character alphanumeric, alphabet excludes `0 / O / 1 / I / L`. `generateCode()` retries on collision against the `Respondent.code @unique` index. Bulk generation for assessment creation pulls a batch and inserts inside a single transaction.
-
-### `src/lib/crypto.ts`
-AES-256-GCM. `encrypt(plaintext: string): Buffer` and `decrypt(buf: Buffer): string`. Master key read from `SETTINGS_ENCRYPTION_KEY` (base64-encoded 32 bytes). Used only for `Settings.encryptedApiKey*` columns.
-
-### `src/lib/audit.ts`
-```ts
-export async function logAdminAction(actorAdminId, assessmentId, action, metadata?)
-export async function logRespondentLifecycle(respondentId, action: 'start'|'submit')
-```
-Append-only. Never accepts an answer value as metadata.
-
-### `src/lib/ai/`
+### `src/lib/ai/` ⏳ Phase 7
 Provider abstraction:
 ```ts
 // src/lib/ai/index.ts
@@ -391,13 +477,12 @@ export interface AiProvider {
 }
 export function selectProvider(settings: Settings): AiProvider
 ```
+- `prompt.ts` builds the **provider-neutral** system + user prompt. See `product-spec/14_ai_prompts.md`.
+- `gemini.ts` / `claude.ts` / `openai.ts` adapt to each SDK.
+- `cache.ts` reads/writes `GeneratedReport` keyed by `(assessmentId, filterSignature)`. Generation **always** overwrites prior cache for that filter.
 
-- `prompt.ts` builds the **provider-neutral** system + user prompt from aggregates + anonymized respondents (letter labels, no names). See `product-spec/14_ai_prompts.md` for prompt content.
-- `gemini.ts` / `claude.ts` / `openai.ts` adapt that prompt to each SDK and parse the response back into `AiReportOutput`.
-- `cache.ts` reads/writes `GeneratedReport` keyed by `(assessmentId, filterSignature)`. Generation **always** writes (overwrites prior cache for that filter). See `product-spec/15_report_generation_and_caching.md`.
-
-### `src/lib/pdf-template.tsx`
-React-PDF template. Page-break rules: each pillar starts a new page, no orphan headers, tables don't split mid-row. Renders the currently filtered view; filter summary is in the page header.
+### `src/lib/pdf-template.tsx` ⏳ Phase 8
+React-PDF template. Page-break rules: each pillar starts a new page, no orphan headers, tables don't split mid-row.
 
 ---
 

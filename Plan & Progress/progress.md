@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 5 — Closure cron + status logic **(landed; awaits live Vercel verification)**
+**Current phase:** Phase 5 complete · ready to merge to `main` · **Phase 6 (live numerical report) is next**
 **Last updated:** 2026-04-29
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -11,19 +11,21 @@
 
 ## 1. Current status
 
-**Phase 0 complete.** All four root documents are rewritten:
-- `CLAUDE.md` — Endurance Assessment working guidelines (working-guidelines section preserved verbatim from reference; project context, stack, env vars, patterns, framework summary all rewritten).
-- `PROJECT_DETAILS.md` — technical reference: stack, target directory layout, full Prisma schema for 8 tables, API route table, server-side module shapes, cache invalidation flow, build commands. Cross-references `product-spec/` for product behavior.
-- `REUSABLE_PATTERNS.md` — applicability table added near the top mapping each of the 15 reference patterns to apply / partial / drop, plus list of new patterns specific to this project. Original 1,201 lines of pattern content untouched.
-- `ENDURANCE_ASSESSMENT_SPEC.md` — replaced with a 53-line index pointing at `product-spec/`.
+**Phases 0–5 complete and pushed.** The branch is being merged to `main`.
 
-The `(1)` / `(5)` upload duplicates have been removed.
+What's built and live on Vercel:
+- **Documentation foundation** — `Plan & Progress/`, `product-spec/` (16 files), `CLAUDE.md`, `PROJECT_DETAILS.md`, `REUSABLE_PATTERNS.md`, `ENDURANCE_ASSESSMENT_SPEC.md` (slim index).
+- **App scaffold** — Next.js 16 (App Router) + React 19 + TypeScript 5.9 + Tailwind 3 + Prisma 5 on Neon Postgres + NextAuth v5. Landing page + admin chrome.
+- **Admin auth + dashboard** — Email/password login, JWT session augmented with role, `proxy.ts` (Next 16's renamed middleware) gating `/admin/*`, role-aware nav, sign-out form action, dashboard listing collecting + closed assessments.
+- **Assessment lifecycle (admin)** — Create form (clientName, deadline, dynamic departments, maxUses), detail page with cohort-code card + capacity strip + respondent table (filtered to demographics-completed, status pill Started/Submitted, Date column), edit page (clientName, deadline, departments add/remove with in-use protection, maxUses with floor), manual "Close now" with confirm.
+- **Respondent flow** — `/take` code entry → `/take/welcome` privacy disclosure → `/take/demographics` (name + dept + level + tenure required) → `/take/question/[1..30]` (Typeform-style, 1–4 + "I don't know" tiles, keyboard 1–4/0, Q30 auto-submits with explicit Submitting state, Back navigation between) → `/take/done`. localStorage resumes the in-flight session per browser.
+- **Closure cron + manual close** — `/api/cron/closure` (Bearer-auth, hourly per `vercel.json`) flips collecting assessments past their deadline → closed, audited as `trigger:'cron'`. Manual close routes through `/api/assessments/[id]/close` with `trigger:'manual'`. All four respondent routes 410 on closed.
 
-**In progress:** Phase 1 scaffold landed — Next.js 16 + Tailwind config, Prisma schema (8 tables matching `PROJECT_DETAILS.md`), `src/lib/prisma.ts`, shared `types.ts` + `constants.ts`, minimal `app/layout.tsx` + landing page, `prisma/seed.ts` (super admin + sample assessment with 5 respondents, 3 submitted), `.env.example`, `.gitignore`, README setup section.
+**DB workflow:** the user has access only to the Neon SQL editor (no local terminal). Hand-runnable SQL files live in `prisma/sql/` and are kept in sync by the Claude session whenever the schema or seed changes. The user has applied `000` + `001` (initial), `002` (cohort codes), `003` (Likert), `004` (levels + demographicsCompletedAt). 5 SQL files are tracked in `prisma/sql/` for future fresh installs and reproducibility.
 
-**DB workflow (decided 2026-04-29):** the user has access to the Neon SQL editor only — no local terminal. Hand-runnable SQL files live in `prisma/sql/` (`000_initial_schema.sql` + `001_seed_sample_data.sql`) and are kept in sync with `prisma/schema.prisma` and `prisma/seed.ts` by the Claude session. When schema or seed changes, the session regenerates the SQL files and tells the user exactly which to paste into Neon. The `npm run db:*` scripts remain available for any future user with a local terminal.
+**Branch:** `claude/continue-claude-docs-NyBFb`. Ready to merge to `main`. New session should branch from main.
 
-**Awaiting:** User to paste `prisma/sql/000_initial_schema.sql` then `prisma/sql/001_seed_sample_data.sql` into the Neon SQL editor to apply the schema and seed data. Once confirmed (super admin + sample assessment present), Phase 2 (admin auth + dashboard) begins.
+**Next session starts at Phase 6** — the live numerical report (`/admin/assessments/[id]/results`): aggregated pillar/capability scores, focus areas, anonymized respondent table, "Preliminary — N of M responded" banner during collection, ≥3 anonymity guardrail, filter UI (department/level/tenure/compound), comparison view (two-filter side-by-side, quantitative only).
 
 ---
 
@@ -39,40 +41,43 @@ The `(1)` / `(5)` upload duplicates have been removed.
 - [x] `REUSABLE_PATTERNS.md` updated with applicability notes
 - [x] Original `ENDURANCE_ASSESSMENT_SPEC.md` replaced with index
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation ✅
 - [x] Next.js 16 + Tailwind project scaffold
-- [x] Prisma schema (admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports)
-- [ ] Neon DB connected, schema pushed *(awaits user — paste `prisma/sql/000_initial_schema.sql` then `prisma/sql/001_seed_sample_data.sql` into Neon SQL editor)*
+- [x] Prisma schema (8 tables: Admin, Assessment, Department, Respondent, Response, Settings, GeneratedReport, AuditLog)
+- [x] Neon DB connected, schema pushed (via `prisma/sql/000` + `001` paste-into-Neon)
 - [x] Seed script: super admin + sample assessment
 
-### Phase 2 — Admin auth + dashboard
+### Phase 2 — Admin auth + dashboard ✅
 - [x] NextAuth email/password (credentials provider, JWT session, bcrypt verification)
 - [x] `/admin/login` and session handling
 - [x] `/admin/dashboard` (active + closed assessments)
 - [x] Role gating (super_admin vs. admin) — header nav exposes super-admin links only to super admins; `requireSuperAdmin()` server-side guard for protected pages
-- [ ] Live Vercel verification: log in with seeded super admin → land on dashboard → see "Acme Corp (sample)" → sign out → log in again *(awaits user)*
+- [x] Live verified
 
-### Phase 3 — Assessment lifecycle (admin side)
-- [x] `/admin/assessments/new` form with departments, deadline, respondents
-- [x] 6-char code generation per respondent (collision-checked)
-- [x] Codes visible/copyable in admin UI (per-row Copy + "Copy all codes")
-- [x] `/admin/assessments/[id]` detail page with status table
-- [ ] Live Vercel verification: create a new assessment → land on detail page → see N codes → copy one → counts (not started / in progress / submitted) match seeded data *(awaits user)*
+### Phase 3 — Assessment lifecycle (admin side) ✅
+- [x] `/admin/assessments/new` form (clientName, deadline, dynamic departments, maxUses)
+- [x] **One cohort code per assessment** (reversed from per-respondent, see decisions log)
+- [x] Cohort code visible/copyable on the detail page
+- [x] `/admin/assessments/[id]` detail page (status, capacity strip, departments, respondent table)
+- [x] `/admin/assessments/[id]/edit` page (clientName, deadline, departments add/remove with in-use protection, maxUses with floor)
+- [x] Manual "Close now" button with confirm
+- [x] Live verified
 
-### Phase 4 — Respondent flow (happy path)
-- [x] `/take` code entry
+### Phase 4 — Respondent flow (happy path) ✅
+- [x] `/take` code entry (case-insensitive)
 - [x] `/take/welcome` with privacy disclosure
-- [x] `/take/demographics` (department / level / tenure / optional name)
-- [x] `/take/question/[1..30]` Typeform-style flow
-- [x] `/take/review` and `/take/done`
-- [x] localStorage progress persistence + server-side answer save
-- [ ] Live Vercel verification: enter cohort code → welcome → demographics → 30 questions (try 1–4 + "I don't know") → review → submit → see "Submitted" → admin dashboard reflects new submitted respondent *(awaits user)*
+- [x] `/take/demographics` (name **required**, department dropdown, 4-tier Level, banded TenureBand)
+- [x] `/take/question/[1..30]` Typeform-style flow with 1–4 tiles + "I don't know" + keyboard shortcuts
+- [x] **No review screen** — Q30 auto-submits with explicit Submitting state to prevent double-click
+- [x] `/take/done` with localStorage cleanup
+- [x] localStorage resume per browser via `tea_respondent_<UPPERCASED_CODE>`
+- [x] Live verified
 
-### Phase 5 — Closure cron + status logic
-- [x] Hourly Vercel Cron flips status when deadline passes
-- [x] Respondent submission blocked post-closure (410)
-- [x] Manual "Close now" admin button (bonus — for testing without waiting on the cron)
-- [ ] Live Vercel verification: edit an assessment to a past deadline → wait for hourly cron OR press "Close now" → assessment shows Closed → entering the cohort code as a respondent yields "This assessment has closed" *(awaits user)*
+### Phase 5 — Closure cron + status logic ✅
+- [x] Hourly Vercel Cron flips status when deadline passes (`vercel.json` + `/api/cron/closure`)
+- [x] Respondent submission blocked post-closure (410 on validate / demographics / responses / submit)
+- [x] Manual "Close now" admin button (audit-logged with `trigger:'manual'`)
+- [x] Live verified
 
 ### Phase 6 — Numerical report (live)
 - [ ] `/admin/assessments/[id]/results` with all 4 sections
@@ -164,11 +169,26 @@ None blocking the build.
 
 If you're a Claude Code session picking this up:
 
-1. **Read `execution-plan.md` first.** It contains every alignment decision made with the user.
-2. **Read `product-spec/` files relevant to your current phase.** Each file is self-contained.
-3. **Read `CLAUDE.md`** for working guidelines (alignment-before-action, change review protocol, UI version tracking).
-4. **Update this file** as you work — mark completed checkboxes, log changes in section 3, surface blockers in section 4.
-5. **Never silently change a decision** captured in `execution-plan.md`. If something needs to change, raise it with the user first.
+1. **Read `execution-plan.md` first.** It contains every alignment decision made with the user, including reversals (cohort code, 1–4 Likert, 4-tier Level, capability-name drift fix).
+2. **Read `CLAUDE.md`** — the "Important Patterns" section captures the actual built behavior, not the early-draft plan.
+3. **Read the relevant `product-spec/` files** — `product-spec/02_questions.md` + `03_scoring_and_bands.md` + `09_demographics.md` are the canonical product rules. If they disagree with code, the spec wins.
+4. **Read `PROJECT_DETAILS.md` § Database Schema and § API Routes** — actual schema and endpoints (✅ implemented vs. ⏳ planned).
+5. **DB workflow:** the user has Neon SQL editor only — no local terminal. When you change `prisma/schema.prisma` or `prisma/seed.ts`, regenerate `prisma/sql/000_initial_schema.sql` (via `npx prisma migrate diff`) and `001_seed_sample_data.sql` (via `node scripts/gen-seed-sql.mjs`). For non-fresh databases, write a numbered diff migration (`005_*.sql`, `006_*.sql`, …) — see `prisma/sql/README.md`. Never attempt `prisma db push` directly; tell the user which file(s) to paste into Neon.
+6. **Sandbox build verification:** before committing, run `npx tsc --noEmit` and `POSTGRES_URL=... DATABASE_URL_UNPOOLED=... NEXTAUTH_SECRET=... SETTINGS_ENCRYPTION_KEY=... CRON_SECRET=... npm run build` (placeholders are fine — the build doesn't connect, it just needs the env vars to exist).
+7. **Update this file** as you work — mark completed checkboxes, log changes in section 3, surface blockers in section 4.
+8. **Never silently change a decision** captured in `execution-plan.md`. If something needs to change, raise it with the user first. Multiple reversals already happened in this session — appending a new decisions-log row noting the reversal is mandatory.
+
+### What's next (Phase 6 — Live numerical report)
+
+The build sequence in `execution-plan.md` lists Phase 6 as `/admin/assessments/[id]/results` with all 4 sections + ≥3 guardrail + filter UI + comparison view. New files needed (none of which exist yet):
+
+- `src/lib/scoring.ts` — pure aggregation (NULL-safe means; per-capability ≥3 floor)
+- `src/lib/filters.ts` — `parseFilter`, `filterSignature`, `applyFilter`, `meetsAnonymityGuardrail`
+- `src/app/admin/assessments/[id]/results/page.tsx` — the results page itself
+- `src/app/api/assessments/[id]/results/route.ts` — server endpoint returning aggregates JSON
+- Plus filter/comparison UI components
+
+The 30 questions are already in `src/data/questions.ts`. Sample data (5 respondents, 3 submitted, 12 NULL "I don't know" answers sprinkled in) is already in the DB.
 
 ---
 
