@@ -14,7 +14,7 @@
 | Dimension | Source | Values |
 |-----------|--------|--------|
 | **Department** | Admin-defined per assessment | Whatever list the admin entered when creating the assessment (editable during collection) |
-| **Level** | Fixed across all assessments | Executive, Senior Leader, Manager, Team Lead, Individual Contributor |
+| **Level** | Fixed across all assessments | Individual Contributor / Early Career, Team Leader / Supervisor, Manager / Department Head, Senior Leader / Executive |
 | **Tenure** | Fixed across all assessments | <1y, 1–3y, 4–7y, 8–15y, 15+y |
 
 A filter selection on any dimension is **multi-select** — admin can pick one or more values. Empty selection on a dimension = "all" (no filtering on that dimension).
@@ -23,33 +23,50 @@ A filter selection on any dimension is **multi-select** — admin can pick one o
 
 ## 2. Filter signature
 
-A deterministic representation of an active filter, used as a cache key for AI reports.
+A deterministic, **human-readable** representation of an active filter. Used as the URL query string, the cache key for AI reports in `generated_reports`, and the suffix on exported PDF filenames. The same string is used in all three places — readability matters because admins inspect URLs and PDF filenames to understand which slice they're looking at.
 
 ### 2.1 Construction
 
+A canonical, sorted query string built from the active filter:
+
 ```
-filter_signature = sha256_hex(json_stable_stringify({
-  departments: sorted(["Sales", "Engineering"]) || [],
-  levels:      sorted(["Manager"]) || [],
-  tenures:     sorted(["4-7y", "8-15y"]) || []
-}))
+filter_signature = canonical_query_string({
+  dept:   sorted(["Engineering", "Sales"]),
+  level:  sorted(["manager"]),
+  tenure: sorted(["y4_7", "y8_15"])
+})
 ```
 
-`json_stable_stringify` ensures keys appear in a fixed order. Sorting array values eliminates ordering variability ("Sales,Engineering" hashes the same as "Engineering,Sales").
+Producing strings of the form:
+
+```
+dept=Engineering,Sales&level=manager&tenure=y4_7,y8_15
+```
+
+Rules:
+- Keys appear in a fixed order: `dept`, `level`, `tenure` (always, even when omitted).
+- Each key's values are sorted alphabetically (so `Sales,Engineering` and `Engineering,Sales` produce the same string).
+- Multiple values within a dimension are joined with `,`.
+- A dimension with no values is **omitted** from the string entirely (it does not appear as `dept=`).
+- Level values use the canonical enum form (`individual_contributor`, `team_leader`, `manager`, `senior_leader`).
+- Tenure values use the canonical enum form (`y_lt1`, `y1_3`, `y4_7`, `y8_15`, `y15_plus`).
+- Department values use the admin-entered name verbatim (URL-encoded).
 
 ### 2.2 Special signatures
 
 | Filter state | Signature |
 |--------------|-----------|
-| No filter active (company-wide) | hash of `{ departments: [], levels: [], tenures: [] }` — typically referred to as `"company_wide"` |
-| Single department | hash of `{ departments: ["Sales"], levels: [], tenures: [] }` |
-| Compound | hash of `{ departments: ["Sales"], levels: ["Manager"], tenures: ["4-7y"] }` |
+| No filter active (company-wide) | `company_wide` |
+| Single department | `dept=Sales` |
+| Compound | `dept=Sales&level=manager&tenure=y4_7` |
 
-### 2.3 Why hash
+`company_wide` is the literal string used both in the URL (when no filter is active, the URL has no filter params) and as the cache key for the unfiltered view.
 
-Two reasons:
-1. **Cache key safety:** raw filter dicts could include user-typed department names with quirks; hashes are uniform length and safe in DB indexes.
-2. **Versioning:** if the filter schema changes (new dimensions added in v2), bumping a `filter_schema_version` prefix invalidates all old caches without DB migration.
+### 2.3 Why a query string and not a hash
+
+A hash is unreadable, so it can't double as the URL parameter or the PDF filename suffix — both of which need to convey "which slice" to a human reader. The inputs to the signature are already controlled (department names from a server-validated list, levels and tenures from fixed enums), so hash-style "input safety" isn't a concern.
+
+If the filter schema changes in v2 (new dimensions added), older cached entries become orphaned naturally — a cache miss for the new signature triggers regeneration. No `filter_schema_version` prefix needed.
 
 ---
 
@@ -91,7 +108,7 @@ Triggered by the "Change filter" button in the report header.
 
 Layout:
 - **Department** section: multi-select chips for each admin-defined department + "Select all" / "Clear" links
-- **Level** section: multi-select chips for the 5 fixed levels
+- **Level** section: multi-select chips for the 4 fixed levels
 - **Tenure** section: multi-select chips for the 5 fixed bands
 - **Live preview**: at the bottom of the modal, before applying, show *"This filter matches 8 respondents (anonymity floor met ✓)"* or *"This filter matches 2 respondents (below floor — view will be locked)"*
 - "Apply" button (disabled when no change), "Cancel" button, "Clear all filters" link
@@ -208,3 +225,4 @@ For terminology used here, see `13_glossary.md`:
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-04-28 | Initial. Defines filter dimensions, signature scheme, anonymity floor (≥3), filter UI, comparison view (quantitative only in v1), and persistence via URL query string. |
+| 0.2 | 2026-04-30 | Drift fix — corrected Level list to the 4 tiers actually in `src/data/constants.ts` (was 5), and replaced the sha256 filter-signature scheme with the canonical query-string form already described in `CLAUDE.md` and `PROJECT_DETAILS.md`. The same string is now used as URL param, cache key, and PDF filename suffix. |

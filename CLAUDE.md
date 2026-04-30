@@ -372,9 +372,10 @@ Each capability has **two statements** (angle A, angle B). **1–4 Likert + "I d
 
 ### Scoring (server-side, Phase 6)
 - **Capability score (per respondent)** = mean of its rated answers (1–4). If both angles are "I don't know", the respondent doesn't contribute to that capability.
-- **Pillar score** = mean of the 5 available capability scores
-- **Overall endurance** = mean of the 3 available pillar scores
-- **Spread** = max − min of a capability across respondents (within the active filter)
+- **Pillar score (per respondent)** = mean of the available capability scores within that pillar (skipping capabilities where both angles were "I don't know").
+- **Overall score (per respondent)** = mean of the available pillar scores.
+- **Team capability / team pillar / team overall** = mean of the available *individual* scores at each level. Specifically: team overall is the mean of individual overall scores, **not** the mean of the 3 team pillar scores. The two only match when "I don't know" answers are evenly distributed across pillars; the per-individual mean is the rigorous form per `product-spec/03_scoring_and_bands.md` § 3.
+- **Spread** = max − min of a capability's individual scores across respondents (within the active filter).
 - All means re-aggregate across respondents within the **currently applied filter** (none / department / level / tenure / compound)
 - A capability needs ≥3 rated answers across the filter to display a score (else "Insufficient data" — per-capability anonymity floor)
 
@@ -414,7 +415,7 @@ Two filters side-by-side, **quantitative only** (no twin AI narratives in v1). B
 
 ---
 
-*Last Updated: 2026-04-29 (post-Phase 5)*
+*Last Updated: 2026-04-30 (Phase 6 alignment — drift fixes)*
 
 ### Built so far (as of 2026-04-29)
 
