@@ -32,10 +32,11 @@ function genCode() {
   return out
 }
 
-// Same deterministic-ish answer pattern as seed.ts
+// Same answer generator as seed.ts: 1..4 rating, or null for "I don't know".
 function answerFor(respondentIndex, questionIndex) {
-  const base = 2 + ((respondentIndex * 7 + questionIndex * 3) % 4)
-  return Math.max(1, Math.min(5, base))
+  const seed = respondentIndex * 7 + questionIndex * 3
+  if (seed % 12 === 0) return null
+  return 1 + (seed % 4)
 }
 
 const sqlEscape = (s) => s.replace(/'/g, "''")
@@ -115,7 +116,8 @@ async function main() {
   out.push(``)
 
   // --- Responses ---
-  out.push(`-- Responses (submitted respondents have all 30; #4 has the first 28; #5 has zero)`)
+  out.push(`-- Responses (submitted respondents have all 30; #4 has 14 of 30; #5 has zero).`)
+  out.push(`-- value=NULL means "I don't know" (a deliberate non-answer).`)
   const responseRows = []
   respondents.forEach((r, i) => {
     if (r.submit) {

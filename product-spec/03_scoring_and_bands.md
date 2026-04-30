@@ -11,64 +11,72 @@
 
 ## 1. Score range
 
-All score values fall on the range **1.00 to 5.00**, expressed to **2 decimal places** in display. Internally they are stored as floats; rounding happens at the display boundary, not in computation.
+All score values fall on the range **1.00 to 4.00**, expressed to **2 decimal places** in display. Internally they are stored as floats; rounding happens at the display boundary, not in computation.
+
+The underlying Likert is 4-point with no neutral midpoint (`1 = Strongly Disagree` … `4 = Strongly Agree`). Respondents who lack visibility into a practice pick **"I don't know"** instead of guessing — these answers are stored but **excluded from every score computation below**. See `02_questions.md` § 3.
 
 ---
 
 ## 2. Individual scoring (per respondent)
 
-For a single respondent who has answered all 30 questions:
+For a single respondent who has completed the assessment (every question has a valid answer of either 1–4 or "I don't know"):
 
 ### 2.1 Capability score
-Mean of the two questions that map to that capability.
+Mean of the **rated** answers (1–4) for the two questions that map to that capability.
 
-```
-capability_score = (rating_a + rating_b) / 2
-```
+- If both angles were rated: `capability_score = (rating_a + rating_b) / 2`
+- If only one angle was rated and the other was "I don't know": `capability_score = the single rating`
+- If both angles were "I don't know": **the capability has no score** for that respondent (they don't contribute to that capability's team aggregation).
 
-Example: a respondent who rates `1a = 4` and `1b = 3` has a Decision Velocity score of `3.50`.
+Example: a respondent who rates `1a = 3` and `1b = 4` has a Decision Velocity score of `3.50`. A respondent who rates `1a = 3` and picks "I don't know" for `1b` has a Decision Velocity score of `3.00`. A respondent who picked "I don't know" for both has no Decision Velocity score.
 
 ### 2.2 Pillar score
-Mean of the five capability scores within that pillar.
+Mean of the **available** capability scores within that pillar (skipping any capability where the respondent picked "I don't know" for both angles).
 
 ```
-pillar_score = mean(capability_scores in pillar)
+pillar_score = mean(capability_scores in pillar that have a value)
 ```
+
+If every capability in a pillar has no score for this respondent (an extreme edge case), the respondent has no pillar score and contributes nothing to the team aggregation for that pillar.
 
 ### 2.3 Overall endurance score
-Mean of the three pillar scores.
+Mean of the **available** pillar scores.
 
 ```
-overall_score = mean(pillar_scores)
+overall_score = mean(pillar_scores that have a value)
 ```
 
-> Equivalent to mean(capability_scores) since each pillar has the same number of capabilities, but compute it from pillar scores so the math chain is explicit and auditable.
+> Why mean-of-pillars rather than mean-of-capabilities: when "I don't know" answers are unevenly distributed across pillars, mean-of-pillars keeps each pillar weighted equally, preventing one well-answered pillar from dominating because it had more rated questions.
 
 ---
 
 ## 3. Team aggregation
 
-For N respondents who have all completed:
+For N respondents who have all completed (where N ≥ 3, the anonymity floor):
 
 ### 3.1 Team capability score
-Mean of all N respondents' capability scores for that capability.
+Mean of the available individual capability scores. Respondents who picked "I don't know" for both angles of this capability are excluded from this capability's team mean — but they still count toward the headline N.
 
 ```
-team_capability_score = mean(individual_capability_scores across N respondents)
+team_capability_score = mean(individual_capability_scores that have a value)
 ```
+
+Display: alongside the team capability score, the report shows how many respondents contributed (e.g., *"3 of 5 rated this capability"*) so the reader knows when a capability is sparsely answered.
+
+If **fewer than 3 respondents** rated a capability (i.e., 3+ picked "I don't know" for both its angles), display **"Insufficient data — fewer than 3 respondents rated this capability"** instead of a score. This is a per-capability extension of the ≥3 anonymity floor: a single rated answer in a capability would be effectively identifiable.
 
 ### 3.2 Team pillar score
-Mean of all N respondents' pillar scores for that pillar.
+Mean of the available individual pillar scores.
 
 ```
-team_pillar_score = mean(individual_pillar_scores across N respondents)
+team_pillar_score = mean(individual_pillar_scores that have a value)
 ```
 
 ### 3.3 Team overall endurance score
-Mean of all N respondents' overall scores.
+Mean of the available individual overall scores.
 
 ```
-team_overall_score = mean(individual_overall_scores across N respondents)
+team_overall_score = mean(individual_overall_scores that have a value)
 ```
 
 ### 3.4 Spread (per capability)
@@ -95,24 +103,26 @@ When a filter is active (department, level, tenure, or compound), all aggregatio
 
 Applied uniformly to any score (overall, pillar, or capability):
 
+Bands cut the 1.00–4.00 range into four equal quartiles of 0.75 each.
+
 | Band | Range | Color (token) | Color (hex) | Meaning |
 |------|-------|---------------|-------------|---------|
-| **Critical Gap** | 1.00 – 1.99 | `red-critical` | `#C0392B` | Immediate priority; actively damaging |
-| **Needs Work** | 2.00 – 2.99 | `orange-gap` | `#E67E22` | Address within the current strategic cycle |
-| **Solid** | 3.00 – 3.99 | `ochre` | `#D4A24C` | Generally sound, refine where useful |
-| **Strong** | 4.00 – 5.00 | `green-solid` | `#27AE60` | Organizational strength, leverage this |
+| **Critical Gap** | 1.00 – 1.74 | `red-critical` | `#C0392B` | Immediate priority; actively damaging |
+| **Needs Work** | 1.75 – 2.49 | `orange-gap` | `#E67E22` | Address within the current strategic cycle |
+| **Solid** | 2.50 – 3.24 | `ochre` | `#D4A24C` | Generally sound, refine where useful |
+| **Strong** | 3.25 – 4.00 | `green-solid` | `#27AE60` | Organizational strength, leverage this |
 
 ### Band assignment
 
 ```pseudocode
 function getBand(score):
-  if score < 2.00:  return "Critical Gap"
-  if score < 3.00:  return "Needs Work"
-  if score < 4.00:  return "Solid"
+  if score < 1.75:  return "Critical Gap"
+  if score < 2.50:  return "Needs Work"
+  if score < 3.25:  return "Solid"
   return "Strong"
 ```
 
-The band applies to whatever score is being displayed: a 3.45 capability score is "Solid"; a 1.80 pillar score is "Critical Gap".
+The band applies to whatever score is being displayed: a 2.85 capability score is "Solid"; a 1.60 pillar score is "Critical Gap".
 
 ### Interpretation strings (auto-shown on the hero panel based on the team overall score)
 

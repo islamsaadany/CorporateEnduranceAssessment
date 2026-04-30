@@ -37,11 +37,14 @@ function genCode(): string {
   return out
 }
 
-// Deterministic-ish answer pattern per respondent so the sample data has
-// realistic spread without using a seedable RNG dependency.
-function answerFor(respondentIndex: number, questionIndex: number): number {
-  const base = 2 + ((respondentIndex * 7 + questionIndex * 3) % 4) // 2..5
-  return Math.max(1, Math.min(5, base)) as 1 | 2 | 3 | 4 | 5
+// Deterministic-ish answer generator. Returns a 1..4 rating, or null for
+// "I don't know". Roughly 1 in 12 answers is "I don't know" so the sample
+// data exercises the missing-answer code paths in scoring and reporting.
+function answerFor(respondentIndex: number, questionIndex: number): 1 | 2 | 3 | 4 | null {
+  const seed = respondentIndex * 7 + questionIndex * 3
+  if (seed % 12 === 0) return null
+  const base = 1 + (seed % 4) // 1..4
+  return base as 1 | 2 | 3 | 4
 }
 
 async function uniqueCode() {
@@ -126,16 +129,16 @@ async function main() {
     })
 
     if (r.submit) {
-      // Full answer set
+      // Full answer set — every question answered (rated or "I don't know")
       await prisma.response.createMany({
         data: QUESTION_IDS.map((qid, qi) => ({
           respondentId: created.id,
           questionId: qid,
-          value: answerFor(i, qi),
+          value: answerFor(i, qi), // null = I don't know
         })),
       })
     } else if (i === 3) {
-      // In-progress: half the answers
+      // In-progress: 14 of 30 questions answered
       await prisma.response.createMany({
         data: QUESTION_IDS.slice(0, 14).map((qid, qi) => ({
           respondentId: created.id,

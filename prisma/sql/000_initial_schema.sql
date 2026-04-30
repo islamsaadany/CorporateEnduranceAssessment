@@ -74,7 +74,7 @@ CREATE TABLE "Response" (
     "id" TEXT NOT NULL,
     "respondentId" TEXT NOT NULL,
     "questionId" TEXT NOT NULL,
-    "value" INTEGER NOT NULL,
+    "value" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

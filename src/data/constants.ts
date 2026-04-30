@@ -78,17 +78,30 @@ export const CAPABILITY_TO_PILLAR: Record<CapabilityKey, PillarKey> = {
   offensive_readiness: 'resilience',
 }
 
+// ─── Likert scale ─────────────────────────────────────────────────────
+
+// 1–4 Likert + "I don't know" (stored as NULL). No neutral midpoint —
+// see decisions log entry "Likert scale" 2026-04-29.
+export const LIKERT_VALUES = [1, 2, 3, 4] as const
+export const LIKERT_LABELS: Record<1 | 2 | 3 | 4, string> = {
+  1: 'Strongly Disagree',
+  2: 'Disagree',
+  3: 'Agree',
+  4: 'Strongly Agree',
+}
+// Sentinel for the "I don't know" choice in form state.
+export const I_DONT_KNOW = 'idk' as const
+export const I_DONT_KNOW_LABEL = "I don't know"
+
 // ─── Bands ────────────────────────────────────────────────────────────
 
-// Inclusive lower / inclusive upper. Uniform across overall / pillar / capability.
-// NOTE: bands here assume the legacy 1–5 Likert scale. If/when the scoring scale
-// changes (e.g., to 1–4 with a "Not sure" non-answer), update both this table
-// and product-spec/03_scoring_and_bands.md in the same change.
+// Even quartile bands across the 1.00–4.00 range. Uniform for overall /
+// pillar / capability. Source of truth: product-spec/03_scoring_and_bands.md.
 export const BAND_THRESHOLDS: Array<{ key: BandKey; min: number; max: number; label: string }> = [
-  { key: 'critical_gap', min: 1.0, max: 1.99, label: 'Critical Gap' },
-  { key: 'needs_work', min: 2.0, max: 2.99, label: 'Needs Work' },
-  { key: 'solid', min: 3.0, max: 3.99, label: 'Solid' },
-  { key: 'strong', min: 4.0, max: 5.0, label: 'Strong' },
+  { key: 'critical_gap', min: 1.0, max: 1.74, label: 'Critical Gap' },
+  { key: 'needs_work', min: 1.75, max: 2.49, label: 'Needs Work' },
+  { key: 'solid', min: 2.5, max: 3.24, label: 'Solid' },
+  { key: 'strong', min: 3.25, max: 4.0, label: 'Strong' },
 ]
 
 export function bandFor(score: number): BandKey {

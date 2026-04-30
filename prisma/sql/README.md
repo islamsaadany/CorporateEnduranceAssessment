@@ -11,6 +11,7 @@ Open the [Neon Console](https://console.neon.tech) → your project → **SQL Ed
 | 1 | [`000_initial_schema.sql`](./000_initial_schema.sql) | Creates all enums, tables, indexes, foreign keys | First-time setup, or when re-pointing at a fresh database |
 | 2 | [`001_seed_sample_data.sql`](./001_seed_sample_data.sql) | Inserts super admin + Settings singleton + 1 sample assessment with respondents | After 000, or whenever you want to refresh sample data |
 | 3 | [`002_cohort_codes.sql`](./002_cohort_codes.sql) | Migrates from per-respondent codes to one cohort code per assessment (adds `Assessment.code` + `Assessment.maxUses`, drops `Respondent.code`) | Run **once** on any DB that was set up before 2026-04-29 |
+| 4 | [`003_likert_scale.sql`](./003_likert_scale.sql) | Migrates from 1–5 Likert to 1–4 Likert + "I don't know". Makes `Response.value` nullable, clamps any 5s → 4, adds CHECK constraint. | Run **once** on any DB where data was loaded before the scoring change |
 
 ## Sample super-admin login
 

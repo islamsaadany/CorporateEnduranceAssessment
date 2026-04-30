@@ -135,7 +135,10 @@ model Response {
   id           String   @id @default(uuid())
   respondentId String
   questionId   String
-  value        Int
+  // 1..4 if rated, NULL if respondent picked "I don't know".
+  // Row existence = answered. NULL value = explicit non-answer (still
+  // counts toward submission completeness, but excluded from scoring).
+  value        Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

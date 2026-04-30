@@ -28,7 +28,10 @@ export type Angle = 'a' | 'b'
 // "1a", "1b", … "15b"
 export type QuestionId = `${number}${Angle}`
 
-export type LikertValue = 1 | 2 | 3 | 4 | 5
+// 1–4 Likert (no neutral). NULL means the respondent picked "I don't know"
+// — a valid completion answer that is excluded from scoring math.
+export type LikertValue = 1 | 2 | 3 | 4
+export type AnswerValue = LikertValue | null
 
 export type BandKey = 'critical_gap' | 'needs_work' | 'solid' | 'strong'
 
