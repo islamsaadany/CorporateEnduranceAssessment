@@ -85,9 +85,24 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
     }
   }
 
-  const advance = () => {
+  const advance = async () => {
     if (position >= total) {
-      router.push('/take/review')
+      // Last question: submit immediately. No review screen.
+      if (!respondentId) return
+      try {
+        const res = await fetch(`/api/respondents/${respondentId}/submit`, { method: 'POST' })
+        if (!res.ok) {
+          // Surface a one-line error and let the user retry by re-clicking.
+          // The most common case is "incomplete" — they have an
+          // unanswered question earlier in the flow.
+          const body = (await res.json().catch(() => null)) as { error?: string } | null
+          setLoadError(humanizeSubmitError(body?.error))
+          return
+        }
+        router.push('/take/done')
+      } catch {
+        setLoadError('Could not submit. Please try again.')
+      }
     } else {
       router.push(`/take/question/${position + 1}`)
     }
@@ -155,8 +170,9 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
       {/* Statement */}
       <h1 className="text-2xl font-medium leading-snug text-ink sm:text-3xl">{questionText}</h1>
 
-      {/* Likert tiles */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {/* Likert tiles — single horizontal row of 4 on desktop. On
+          narrow screens (< 480px) they wrap to a 2×2 grid. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {LIKERT_VALUES.map((v) => {
           const isSelected = selected === v
           return (
@@ -165,20 +181,20 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
               type="button"
               onClick={() => onSelect(v)}
               disabled={saving}
-              className={`flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm transition disabled:cursor-not-allowed ${
+              className={`flex flex-col items-center gap-1 rounded-md border px-3 py-4 text-center text-sm transition disabled:cursor-not-allowed ${
                 isSelected
                   ? 'border-ink bg-ink text-canvas'
                   : 'border-canvas-border bg-canvas text-ink hover:bg-canvas-muted'
               }`}
             >
               <span
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-xs ${
+                className={`flex h-7 w-7 items-center justify-center rounded font-mono text-sm font-semibold ${
                   isSelected ? 'bg-canvas/20 text-canvas' : 'bg-canvas-muted text-ink-muted'
                 }`}
               >
                 {v}
               </span>
-              <span className="font-medium">{LIKERT_LABELS[v]}</span>
+              <span className="text-xs font-medium leading-tight sm:text-sm">{LIKERT_LABELS[v]}</span>
             </button>
           )
         })}
@@ -216,6 +232,21 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
       </div>
     </div>
   )
+}
+
+function humanizeSubmitError(code: string | undefined): string {
+  switch (code) {
+    case 'incomplete':
+      return 'You have an unanswered earlier question. Use Back to find and answer it.'
+    case 'demographics_incomplete':
+      return 'Your demographics are incomplete. Please return to the demographics step.'
+    case 'already_submitted':
+      return 'This response has already been submitted.'
+    case 'assessment_closed':
+      return 'This assessment has closed. No more responses are accepted.'
+    default:
+      return 'Could not submit. Please try again.'
+  }
 }
 
 function findRespondentIdInStorage(): string | null {

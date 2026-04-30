@@ -4,7 +4,9 @@ import { Level, TenureBand } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 const demographicsSchema = z.object({
-  name: z.string().trim().max(120).nullable().optional(),
+  // Name is required (the report still anonymizes it by default — only
+  // surfaced via the admin "show names" toggle).
+  name: z.string().trim().min(1, 'Name is required.').max(120),
   // Department by id (server cross-checks it belongs to the right
   // assessment).
   departmentId: z.string().uuid(),
@@ -36,7 +38,13 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   const respondent = await prisma.respondent.findUnique({
     where: { id },
-    include: { assessment: { select: { status: true } } },
+    select: {
+      id: true,
+      assessmentId: true,
+      submittedAt: true,
+      demographicsCompletedAt: true,
+      assessment: { select: { status: true, maxUses: true } },
+    },
   })
   if (!respondent) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 })
@@ -46,6 +54,19 @@ export async function PATCH(req: Request, { params }: Ctx) {
   }
   if (respondent.assessment.status === 'closed') {
     return NextResponse.json({ error: 'assessment_closed' }, { status: 410 })
+  }
+
+  // Cap re-check at the moment of "becoming a real respondent" (first
+  // demographics save). Prevents a race where multiple ghost rows
+  // validate when the cap had room, then all try to complete after it
+  // filled up. Subsequent saves on the same respondent skip this check.
+  if (!respondent.demographicsCompletedAt) {
+    const completedCount = await prisma.respondent.count({
+      where: { assessmentId: respondent.assessmentId, demographicsCompletedAt: { not: null } },
+    })
+    if (completedCount >= respondent.assessment.maxUses) {
+      return NextResponse.json({ error: 'assessment_full' }, { status: 403 })
+    }
   }
 
   // Verify the department belongs to this respondent's assessment.
@@ -60,10 +81,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
   await prisma.respondent.update({
     where: { id },
     data: {
-      name: parsed.data.name ?? null,
+      name: parsed.data.name,
       departmentId: dept.id,
       level: parsed.data.level,
       tenure: parsed.data.tenure,
+      // First successful save stamps demographicsCompletedAt; subsequent
+      // saves (e.g., user navigates back and changes a field before
+      // submitting) leave the original timestamp in place.
+      demographicsCompletedAt: respondent.demographicsCompletedAt ?? new Date(),
     },
   })
 

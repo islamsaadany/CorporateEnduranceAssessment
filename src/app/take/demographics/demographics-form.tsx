@@ -86,6 +86,10 @@ export function DemographicsForm() {
     setError(null)
 
     if (!state) return
+    if (!name.trim()) {
+      setError('Name is required.')
+      return
+    }
     if (!departmentId) {
       setError('Please pick a department.')
       return
@@ -104,7 +108,7 @@ export function DemographicsForm() {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim() || null,
+          name: name.trim(),
           departmentId,
           level,
           tenure,
@@ -112,7 +116,12 @@ export function DemographicsForm() {
       })
 
       if (!res.ok) {
-        setError('Could not save. Please try again.')
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        if (body?.error === 'assessment_full') {
+          setError('This assessment is at capacity. Contact your consultant to raise the cap.')
+        } else {
+          setError('Could not save. Please try again.')
+        }
         return
       }
 
@@ -139,14 +148,15 @@ export function DemographicsForm() {
         </div>
       ) : null}
 
-      <Field label="Name (optional)">
+      <Field label="Full name" required>
         <input
           type="text"
+          required
           maxLength={120}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="input"
-          placeholder="Your name (optional)"
+          placeholder="Your name"
         />
       </Field>
 

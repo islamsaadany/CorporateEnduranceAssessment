@@ -47,23 +47,26 @@ export async function PATCH(req: Request, { params }: Ctx) {
     where: { id },
     include: {
       departments: { include: { _count: { select: { respondents: true } } } },
-      _count: { select: { respondents: true } },
     },
   })
   if (!assessment) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 })
   }
 
-  // Enforce: cannot lower maxUses below the count of respondents that
-  // already exist for this assessment.
-  if (maxUses < assessment._count.respondents) {
+  // Enforce: cannot lower maxUses below the count of respondents who
+  // have completed demographics. Ghost rows (validated-then-bounced)
+  // don't burn a slot and don't count here either.
+  const completedCount = await prisma.respondent.count({
+    where: { assessmentId: id, demographicsCompletedAt: { not: null } },
+  })
+  if (maxUses < completedCount) {
     return NextResponse.json(
       {
         error: 'validation_failed',
         issues: {
           fieldErrors: {
             maxUses: [
-              `Cap cannot be lower than the current respondent count (${assessment._count.respondents}).`,
+              `Cap cannot be lower than the current respondent count (${completedCount}).`,
             ],
           },
         },

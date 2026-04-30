@@ -28,9 +28,12 @@ export async function POST(req: Request) {
 
   const assessment = await prisma.assessment.findUnique({
     where: { code },
-    include: {
+    select: {
+      id: true,
+      clientName: true,
+      status: true,
+      maxUses: true,
       departments: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
-      _count: { select: { respondents: true } },
     },
   })
   if (!assessment) {
@@ -58,8 +61,12 @@ export async function POST(req: Request) {
     // Otherwise fall through and (subject to cap) create a new one.
   }
 
-  // Cap check: count of respondents created so far for this assessment.
-  if (assessment._count.respondents >= assessment.maxUses) {
+  // Cap check: only count respondents that finished demographics. Ghost
+  // rows (validated-then-bounced, no demographics) do not consume slots.
+  const completedCount = await prisma.respondent.count({
+    where: { assessmentId: assessment.id, demographicsCompletedAt: { not: null } },
+  })
+  if (completedCount >= assessment.maxUses) {
     return NextResponse.json({ error: 'assessment_full' }, { status: 403 })
   }
 

@@ -113,14 +113,15 @@ export function bandFor(score: number): BandKey {
 
 // ─── Demographics ─────────────────────────────────────────────────────
 
-export const LEVELS: Level[] = ['executive', 'senior_leader', 'manager', 'team_lead', 'individual_contributor']
+// 4 merged tiers — see product-spec/09_demographics.md.
+// Order in the dropdown is least-senior → most-senior.
+export const LEVELS: Level[] = ['individual_contributor', 'team_leader', 'manager', 'senior_leader']
 
 export const LEVEL_LABELS: Record<Level, string> = {
-  executive: 'Executive',
-  senior_leader: 'Senior Leader',
-  manager: 'Manager',
-  team_lead: 'Team Lead',
-  individual_contributor: 'Individual Contributor',
+  individual_contributor: 'Individual Contributor / Early Career',
+  team_leader: 'Team Leader / Supervisor',
+  manager: 'Manager / Department Head',
+  senior_leader: 'Senior Leader / Executive',
 }
 
 export const TENURE_BANDS: TenureBand[] = ['lt_1y', 'y1_3', 'y4_7', 'y8_15', 'gt_15y']

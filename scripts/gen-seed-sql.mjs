@@ -52,9 +52,9 @@ async function main() {
   const respondents = [
     { id: randomUUID(), departmentId: salesId, level: 'manager',                 tenure: 'y4_7',   name: 'Avery R.', submit: true  },
     { id: randomUUID(), departmentId: salesId, level: 'senior_leader',           tenure: 'y8_15',  name: 'Blake S.', submit: true  },
-    { id: randomUUID(), departmentId: engId,   level: 'executive',               tenure: 'gt_15y', name: 'Casey T.', submit: true  },
-    { id: randomUUID(), departmentId: engId,   level: 'team_lead',               tenure: 'y1_3',   name: 'Drew V.',  submit: false },
-    { id: randomUUID(), departmentId: engId,   level: 'individual_contributor',  tenure: 'lt_1y',  name: null,       submit: false },
+    { id: randomUUID(), departmentId: engId,   level: 'senior_leader',           tenure: 'gt_15y', name: 'Casey T.', submit: true  },
+    { id: randomUUID(), departmentId: engId,   level: 'team_leader',             tenure: 'y1_3',   name: 'Drew V.',  submit: false },
+    { id: randomUUID(), departmentId: engId,   level: 'individual_contributor',  tenure: 'lt_1y',  name: 'Eli W.',   submit: false },
   ]
 
   const out = []
@@ -105,13 +105,13 @@ async function main() {
   out.push(``)
 
   // --- Respondents ---
-  out.push(`-- Respondents (5 sample rows: 3 submitted, 1 in-progress, 1 fresh-no-answers)`)
+  out.push(`-- Respondents (5 sample rows: 3 submitted, 1 in-progress, 1 fresh-no-answers).`)
+  out.push(`-- All have demographicsCompletedAt set so they show up in the admin table.`)
   const respondentRows = respondents.map((r) => {
     const submittedAt = r.submit ? 'NOW()' : 'NULL'
-    const nameSql = r.name === null ? 'NULL' : `'${sqlEscape(r.name)}'`
-    return `  ('${r.id}', '${assessmentId}', ${nameSql}, '${r.departmentId}', '${r.level}', '${r.tenure}', NOW(), ${submittedAt}, NOW(), NOW())`
+    return `  ('${r.id}', '${assessmentId}', '${sqlEscape(r.name)}', '${r.departmentId}', '${r.level}', '${r.tenure}', NOW(), NOW(), ${submittedAt}, NOW(), NOW())`
   })
-  out.push(`INSERT INTO "Respondent" ("id", "assessmentId", "name", "departmentId", "level", "tenure", "startedAt", "submittedAt", "createdAt", "updatedAt") VALUES`)
+  out.push(`INSERT INTO "Respondent" ("id", "assessmentId", "name", "departmentId", "level", "tenure", "demographicsCompletedAt", "startedAt", "submittedAt", "createdAt", "updatedAt") VALUES`)
   out.push(respondentRows.join(',\n') + ';')
   out.push(``)
 

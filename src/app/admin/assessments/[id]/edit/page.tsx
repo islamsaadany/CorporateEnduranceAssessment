@@ -21,10 +21,15 @@ export default async function EditAssessmentPage({ params }: EditPageProps) {
         orderBy: { name: 'asc' },
         include: { _count: { select: { respondents: true } } },
       },
-      _count: { select: { respondents: true } },
     },
   })
   if (!assessment) notFound()
+
+  // Cap can't be lowered below the count of demographics-completed
+  // respondents (ghost rows don't count).
+  const completedCount = await prisma.respondent.count({
+    where: { assessmentId: id, demographicsCompletedAt: { not: null } },
+  })
 
   const existingDepartments: ExistingDepartment[] = assessment.departments.map((d) => ({
     id: d.id,
@@ -49,7 +54,7 @@ export default async function EditAssessmentPage({ params }: EditPageProps) {
       <p className="mt-1 text-sm text-ink-muted">
         Update the client name, deadline, departments, or respondent cap. Departments that have already been
         used by a respondent cannot be removed; the cap cannot be lowered below the current respondent count
-        ({assessment._count.respondents}).
+        ({completedCount}).
       </p>
 
       <div className="mt-8">
@@ -59,7 +64,7 @@ export default async function EditAssessmentPage({ params }: EditPageProps) {
           initialDeadline={deadlineLocal}
           initialMaxUses={assessment.maxUses}
           existingDepartments={existingDepartments}
-          minMaxUses={Math.max(3, assessment._count.respondents)}
+          minMaxUses={Math.max(3, completedCount)}
         />
       </div>
     </div>

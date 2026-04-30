@@ -5,7 +5,7 @@ CREATE TYPE "AdminRole" AS ENUM ('admin', 'super_admin');
 CREATE TYPE "AssessmentStatus" AS ENUM ('collecting', 'closed');
 
 -- CreateEnum
-CREATE TYPE "Level" AS ENUM ('executive', 'senior_leader', 'manager', 'team_lead', 'individual_contributor');
+CREATE TYPE "Level" AS ENUM ('individual_contributor', 'team_leader', 'manager', 'senior_leader');
 
 -- CreateEnum
 CREATE TYPE "TenureBand" AS ENUM ('lt_1y', 'y1_3', 'y4_7', 'y8_15', 'gt_15y');
@@ -61,6 +61,7 @@ CREATE TABLE "Respondent" (
     "departmentId" TEXT,
     "level" "Level",
     "tenure" "TenureBand",
+    "demographicsCompletedAt" TIMESTAMP(3),
     "startedAt" TIMESTAMP(3),
     "submittedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -150,6 +151,9 @@ CREATE INDEX "Respondent_departmentId_idx" ON "Respondent"("departmentId");
 
 -- CreateIndex
 CREATE INDEX "Respondent_assessmentId_submittedAt_idx" ON "Respondent"("assessmentId", "submittedAt");
+
+-- CreateIndex
+CREATE INDEX "Respondent_assessmentId_demographicsCompletedAt_idx" ON "Respondent"("assessmentId", "demographicsCompletedAt");
 
 -- CreateIndex
 CREATE INDEX "Response_questionId_idx" ON "Response"("questionId");

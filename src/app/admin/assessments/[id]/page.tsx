@@ -19,20 +19,27 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
     where: { id },
     include: {
       departments: { orderBy: { name: 'asc' } },
+      // Only "real" respondents — those who finished demographics. Ghost
+      // rows from validate-then-bounce are filtered out so the table
+      // doesn't show empty-data rows.
       respondents: {
-        orderBy: { createdAt: 'desc' },
+        where: { demographicsCompletedAt: { not: null } },
+        orderBy: [{ submittedAt: { sort: 'desc', nulls: 'last' } }, { demographicsCompletedAt: 'desc' }],
         include: { department: { select: { name: true } } },
       },
     },
   })
   if (!assessment) notFound()
 
+  // "Started" = demographics done, not yet submitted.
+  // "Submitted" = submitted.
+  // Total counts toward the cap.
   const totals = {
-    started: assessment.respondents.length,
-    inProgress: assessment.respondents.filter((r) => r.startedAt && !r.submittedAt).length,
+    total: assessment.respondents.length,
+    started: assessment.respondents.filter((r) => !r.submittedAt).length,
     submitted: assessment.respondents.filter((r) => r.submittedAt).length,
   }
-  const remaining = Math.max(0, assessment.maxUses - totals.started)
+  const remaining = Math.max(0, assessment.maxUses - totals.total)
 
   const dateFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -81,8 +88,8 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
 
       {/* Capacity strip */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Started" value={totals.started} secondary={`of ${assessment.maxUses} cap`} />
-        <Stat label="In progress" value={totals.inProgress} />
+        <Stat label="Total" value={totals.total} secondary={`of ${assessment.maxUses} cap`} />
+        <Stat label="Started" value={totals.started} secondary="demographics done, in progress" />
         <Stat label="Submitted" value={totals.submitted} accent />
         <Stat label="Remaining capacity" value={remaining} />
       </section>
@@ -119,13 +126,13 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
                   <th className="px-4 py-3">Department</th>
                   <th className="px-4 py-3">Level</th>
                   <th className="px-4 py-3">Tenure</th>
-                  <th className="px-4 py-3">Started</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Submitted</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-canvas-border">
                 {assessment.respondents.map((r) => {
-                  const status = r.submittedAt ? 'submitted' : r.startedAt ? 'in_progress' : 'not_started'
+                  const status: 'started' | 'submitted' = r.submittedAt ? 'submitted' : 'started'
                   return (
                     <tr key={r.id}>
                       <td className="px-4 py-3 text-ink">{r.name ?? <span className="text-ink-subtle">—</span>}</td>
@@ -136,11 +143,11 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
                       <td className="px-4 py-3 text-ink-muted">
                         {r.tenure ? TENURE_LABELS[r.tenure] : <span className="text-ink-subtle">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">
-                        {r.startedAt ? dateFmt.format(r.startedAt) : <span className="text-ink-subtle">—</span>}
-                      </td>
                       <td className="px-4 py-3">
                         <RespondentStatus status={status} />
+                      </td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {r.submittedAt ? dateFmt.format(r.submittedAt) : <span className="text-ink-subtle">—</span>}
                       </td>
                     </tr>
                   )
@@ -171,12 +178,9 @@ function Stat({ label, value, secondary, accent }: { label: string; value: numbe
   )
 }
 
-function RespondentStatus({ status }: { status: 'not_started' | 'in_progress' | 'submitted' }) {
+function RespondentStatus({ status }: { status: 'started' | 'submitted' }) {
   if (status === 'submitted') {
     return <span className="rounded bg-band-strong/10 px-2 py-0.5 text-xs font-medium text-band-strong">Submitted</span>
   }
-  if (status === 'in_progress') {
-    return <span className="rounded bg-band-needs/10 px-2 py-0.5 text-xs font-medium text-band-needs">In progress</span>
-  }
-  return <span className="rounded bg-canvas-muted px-2 py-0.5 text-xs font-medium text-ink-muted">Not started</span>
+  return <span className="rounded bg-band-needs/10 px-2 py-0.5 text-xs font-medium text-band-needs">Started</span>
 }

@@ -107,11 +107,11 @@ async function main() {
   const eng = assessment.departments.find((d) => d.name === 'Engineering')!
 
   const respondents = [
-    { department: sales, level: Level.manager, tenure: TenureBand.y4_7, name: 'Avery R.', submit: true },
-    { department: sales, level: Level.senior_leader, tenure: TenureBand.y8_15, name: 'Blake S.', submit: true },
-    { department: eng, level: Level.executive, tenure: TenureBand.gt_15y, name: 'Casey T.', submit: true },
-    { department: eng, level: Level.team_lead, tenure: TenureBand.y1_3, name: 'Drew V.', submit: false },
-    { department: eng, level: Level.individual_contributor, tenure: TenureBand.lt_1y, name: null, submit: false },
+    { department: sales, level: Level.manager,                tenure: TenureBand.y4_7,   name: 'Avery R.',  submit: true  },
+    { department: sales, level: Level.senior_leader,          tenure: TenureBand.y8_15,  name: 'Blake S.',  submit: true  },
+    { department: eng,   level: Level.senior_leader,          tenure: TenureBand.gt_15y, name: 'Casey T.',  submit: true  },
+    { department: eng,   level: Level.team_leader,            tenure: TenureBand.y1_3,   name: 'Drew V.',   submit: false },
+    { department: eng,   level: Level.individual_contributor, tenure: TenureBand.lt_1y,  name: 'Eli W.',    submit: false },
   ]
 
   for (let i = 0; i < respondents.length; i++) {
@@ -119,11 +119,12 @@ async function main() {
     const created = await prisma.respondent.create({
       data: {
         assessmentId: assessment.id,
-        name: r.name ?? undefined,
+        name: r.name,
         departmentId: r.department.id,
         level: r.level,
         tenure: r.tenure,
-        startedAt: new Date(), // first 4 have started; last is also "started" but with no answers
+        demographicsCompletedAt: new Date(),
+        startedAt: new Date(),
         submittedAt: r.submit ? new Date() : null,
       },
     })

@@ -28,11 +28,11 @@ enum AssessmentStatus {
 }
 
 enum Level {
-  executive
-  senior_leader
-  manager
-  team_lead
-  individual_contributor
+  // 4 merged tiers — see product-spec/09_demographics.md.
+  individual_contributor // "Individual Contributor / Early Career"
+  team_leader            // "Team Leader / Supervisor"
+  manager                // "Manager / Department Head"
+  senior_leader          // "Senior Leader / Executive"
 }
 
 enum TenureBand {
@@ -113,10 +113,19 @@ model Respondent {
   // Per-respondent code is gone — see decisions log reversal 2026-04-29.
   // Identity comes from the (id, browser localStorage) pairing during the
   // respondent flow. The cohort code lives on Assessment.
+  //
+  // Name is collected as part of demographics. The DB column stays
+  // nullable because (a) a respondent row exists between code-validation
+  // and demographics-save, and (b) older sample data may have NULLs.
+  // The API enforces non-empty name when demographics are saved.
   name         String?
   departmentId String?
   level        Level?
   tenure       TenureBand?
+  // Set when the respondent saves demographics. Used to distinguish
+  // "real" respondents (demographics-completed) from ghost rows
+  // (validated-then-bounced). Cap checks + admin UI filter on this.
+  demographicsCompletedAt DateTime?
   startedAt    DateTime?
   submittedAt  DateTime?
   createdAt    DateTime    @default(now())
@@ -129,6 +138,7 @@ model Respondent {
   @@index([assessmentId])
   @@index([departmentId])
   @@index([assessmentId, submittedAt])
+  @@index([assessmentId, demographicsCompletedAt])
 }
 
 model Response {
