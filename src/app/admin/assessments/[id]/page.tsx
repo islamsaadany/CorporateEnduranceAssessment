@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/admin-guard'
 import { prisma } from '@/lib/prisma'
 import { LEVEL_LABELS, TENURE_LABELS } from '@/data/constants'
 import { CopyButton } from './copy-button'
+import { CloseButton } from './close-button'
 
 export const metadata = { title: 'Assessment — The Endurance Assessment' }
 
@@ -61,12 +62,17 @@ export default async function AssessmentDetailPage({ params }: DetailPageProps) 
               </span>
             </p>
           </div>
-          <Link
-            href={`/admin/assessments/${assessment.id}/edit`}
-            className="rounded-md border border-canvas-border bg-canvas px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-canvas-muted"
-          >
-            Edit
-          </Link>
+          <div className="flex items-center gap-2">
+            {assessment.status === 'collecting' ? (
+              <CloseButton assessmentId={assessment.id} />
+            ) : null}
+            <Link
+              href={`/admin/assessments/${assessment.id}/edit`}
+              className="rounded-md border border-canvas-border bg-canvas px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-canvas-muted"
+            >
+              Edit
+            </Link>
+          </div>
         </div>
       </div>
 

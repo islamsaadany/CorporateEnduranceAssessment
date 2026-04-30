@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 4 — Respondent flow **(landed; awaits live Vercel verification)**
+**Current phase:** Phase 5 — Closure cron + status logic **(landed; awaits live Vercel verification)**
 **Last updated:** 2026-04-29
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -69,8 +69,10 @@ The `(1)` / `(5)` upload duplicates have been removed.
 - [ ] Live Vercel verification: enter cohort code → welcome → demographics → 30 questions (try 1–4 + "I don't know") → review → submit → see "Submitted" → admin dashboard reflects new submitted respondent *(awaits user)*
 
 ### Phase 5 — Closure cron + status logic
-- [ ] Hourly Vercel Cron flips status when deadline passes
-- [ ] Respondent submission blocked post-closure (410)
+- [x] Hourly Vercel Cron flips status when deadline passes
+- [x] Respondent submission blocked post-closure (410)
+- [x] Manual "Close now" admin button (bonus — for testing without waiting on the cron)
+- [ ] Live Vercel verification: edit an assessment to a past deadline → wait for hourly cron OR press "Close now" → assessment shows Closed → entering the cohort code as a respondent yields "This assessment has closed" *(awaits user)*
 
 ### Phase 6 — Numerical report (live)
 - [ ] `/admin/assessments/[id]/results` with all 4 sections
@@ -124,6 +126,7 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 | Date | Phase | Change |
 |------|-------|--------|
+| 2026-04-29 | 5 | Phase 5 landed: `POST /api/cron/closure` (Bearer-auth via CRON_SECRET; finds collecting assessments past deadline; per-assessment $transaction sets status=closed + closedAt + writes assessment.close audit entry with metadata={trigger:'cron'}; idempotent; force-dynamic; GET=POST alias for manual curl testing). vercel.json adds `crons: [{path:'/api/cron/closure', schedule:'0 * * * *'}]`. Also `POST /api/assessments/[id]/close` for the manual close path (Bearer-not-needed, NextAuth session check; trigger:'manual'; 409 if already closed). New `CloseButton` client component on the admin detail page renders only while status='collecting' (with a confirm step before firing). Existing 410 guards in respondent routes (validate / demographics / responses / submit) already block post-closure activity. Build clean (23 routes; +/api/cron/closure, +/api/assessments/[id]/close). |
 | 2026-04-29 | 3 | **Cohort code reversal + edit page + form UX** (per user feedback): switched from per-respondent codes to one cohort code per assessment with `maxUses` hard cap. Schema: `Assessment.code` (unique) + `Assessment.maxUses` added; `Respondent.code` dropped. New `prisma/sql/002_cohort_codes.sql` migrates the live DB in place (idempotent). 000 + 001 SQL regenerated. `POST /api/assessments` now creates ONE assessment + ONE code, no bulk respondent rows. New `PATCH /api/assessments/[id]` for editing client name + deadline + departments + maxUses, with rules: department in use cannot be removed (409), maxUses cannot drop below current respondent count. New `/admin/assessments/[id]/edit` page wraps the rules in UI (in-use departments shown locked). Detail page now shows the single cohort code with copy + capacity strip (Started / In progress / Submitted / Remaining). Form Enter-key fix: pressing Enter inside a department row appends a new row + focuses it (does nothing if current row is empty), and never submits the form. Decisions log gets a 2026-04-29 reversal entry. Build clean (10 routes). |
 | 2026-04-29 | 3 | Phase 3 landed: `src/lib/codes.ts` (6-char generator over 31-char alphabet excluding 0/O/1/I/L, batch collision-checked against the unique `Respondent.code` index, retries up to 5 times); `src/lib/audit.ts` (`logAdminAction` + `logRespondentLifecycle` with typed action enums and JSON-safe metadata); `POST /api/assessments` (Zod validation, future-deadline check, dept dedup, transactional create wired to `assessment.create` audit log); `/admin/assessments/new` server page + `NewAssessmentForm` client (client name, future deadline, dynamic department list, respondent count 3–100); `/admin/assessments/[id]` detail page (status pill, totals strip not-started/in-progress/submitted, departments chips, respondent table with code + name + dept + level + tenure + status, per-row + bulk "Copy all codes" client buttons). Build clean (8 routes). |
 | 2026-04-29 | 2 | Phase 2 landed: NextAuth v5 credentials provider with bcrypt + Zod; JWT session augmented with `id` + `role`; `proxy.ts` (Next 16's renamed middleware) gates `/admin/*` for unauthed users and bounces authed users away from `/admin/login`; `src/lib/admin-guard.ts` provides `requireAdmin()` / `requireSuperAdmin()` server-side helpers; `/admin/login` page (server component + client form using `signIn` from `next-auth/react`); `/admin/layout.tsx` with header nav (super-admin links visible only to super admins) + sign-out form action; `/admin/dashboard` listing collecting + closed assessments grouped by status. Verified with `npx tsc --noEmit` and `npm run build` (6 routes). |
