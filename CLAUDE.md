@@ -230,9 +230,10 @@ Database credentials are stored in `.env.local` (gitignored) for security.
 **Required env vars:**
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `POSTGRES_URL` | Neon pooled connection string (used at runtime) — Vercel's Neon integration sets this automatically |
+| `DATABASE_URL_UNPOOLED` | Neon direct connection string (used for migrations / `prisma db push`) — Vercel's Neon integration sets this automatically |
 | `NEXTAUTH_SECRET` | NextAuth session signing secret (any random 32+ char string) |
-| `NEXTAUTH_URL` | Public app URL (e.g. `http://localhost:3000` locally, the Vercel URL in prod) |
+| `NEXTAUTH_URL` | Public app URL (only needed locally; on Vercel, NextAuth v5 auto-detects from `VERCEL_URL`) |
 | `SETTINGS_ENCRYPTION_KEY` | 32-byte AES-256 master key (base64) used to encrypt admin-supplied AI provider API keys at rest in `settings` |
 | `GEMINI_API_KEY` *(optional bootstrap)* | Used as a fallback when no provider is configured in the admin panel. Surfaces a persistent banner asking the super admin to save in panel. |
 | `OPENAI_API_KEY` *(optional bootstrap)* | Same fallback role for OpenAI. |

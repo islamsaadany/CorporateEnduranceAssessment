@@ -146,7 +146,8 @@ None blocking the build.
 
 ### Deferred items (revisit before any production deploy)
 
-- **Rotate the Neon `neondb_owner` password.** A connection string with the live password was pasted into a chat transcript on 2026-04-29 and should be considered compromised. User explicitly chose to defer rotation to keep momentum. Action: reset the role password in Neon Console → Roles → `neondb_owner`, then update `DATABASE_URL` in `.env.local` (and Vercel env vars when deployed). **This must happen before any non-local data is in the DB.**
+- **Rotate the Neon `neondb_owner` password.** A connection string with the live password was pasted into a chat transcript on 2026-04-29 and should be considered compromised. User explicitly chose to defer rotation to keep momentum. Action: reset the role password in Neon Console → Roles → `neondb_owner`, then update `POSTGRES_URL` and `DATABASE_URL_UNPOOLED` in Vercel env vars (and `.env.local` if/when used). **This must happen before any non-local data is in the DB.**
+- **Rotate the three secrets generated in chat.** On 2026-04-29 the values for `NEXTAUTH_SECRET`, `SETTINGS_ENCRYPTION_KEY`, and `CRON_SECRET` were generated in this transcript and pasted by the user into Vercel env vars. They must be considered exposed. Action: regenerate (`openssl rand -base64 32` for each) and update Vercel env vars, then redeploy. After rotation, no AI-provider keys will work that were encrypted under the old `SETTINGS_ENCRYPTION_KEY` — re-save them in the admin panel.
 
 > When something blocks progress, add an entry here describing: what's blocked, why, what unblocks it, who needs to act. Remove when resolved.
 

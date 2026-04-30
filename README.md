@@ -43,7 +43,7 @@ cp .env.example .env.local
 ```
 
 Fill in:
-- `DATABASE_URL` — your Neon connection string
+- `POSTGRES_URL` and `DATABASE_URL_UNPOOLED` — your Neon connection strings (Vercel's Neon integration sets both automatically; locally, copy from the Neon dashboard)
 - `NEXTAUTH_SECRET` — 32+ random bytes (`openssl rand -base64 32`)
 - `NEXTAUTH_URL` — `http://localhost:3000` for local dev
 - `SETTINGS_ENCRYPTION_KEY` — 32 bytes base64 (`openssl rand -base64 32`)
@@ -115,7 +115,7 @@ See [`prisma/sql/README.md`](./prisma/sql/README.md) for the full workflow and h
 ## Build / verify
 
 ```bash
-npm run build        # full production build (requires DATABASE_URL)
+npm run build        # full production build (requires POSTGRES_URL)
 npm run lint         # ESLint
 npx tsc --noEmit     # TypeScript only (no DB needed)
 ```

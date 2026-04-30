@@ -447,7 +447,7 @@ The technical reference above intentionally omits product/content rules. Use the
 
 ```bash
 npm run dev          # Next.js dev server on :3000
-npm run build        # Full production build (requires DATABASE_URL)
+npm run build        # Full production build (requires POSTGRES_URL)
 npm run start        # Run the production build
 npm run lint         # ESLint
 npx tsc --noEmit     # TypeScript check only (no DB needed)
@@ -465,7 +465,7 @@ npm run seed         # Run prisma/seed.ts — creates super admin + sample asses
 ## Env Vars Quick Reference
 
 See `CLAUDE.md → Configuration` for the authoritative list. In short:
-- `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `SETTINGS_ENCRYPTION_KEY`, `CRON_SECRET` — required
+- `POSTGRES_URL`, `DATABASE_URL_UNPOOLED`, `NEXTAUTH_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `CRON_SECRET` — required (on Vercel, `NEXTAUTH_URL` auto-detects from `VERCEL_URL`)
 - `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — optional bootstrap fallbacks
 - `RESEND_API_KEY` — **not used.** No emails.
 
