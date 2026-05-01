@@ -31,6 +31,28 @@
 - **After ANY UI change, save a snapshot of the changed file to `ui-versions/` folder (see UI Version Tracking below)**
 - **This rule exists because previous sessions have accidentally reverted agreed-upon designs**
 
+### 1d. CRITICAL: User Has No Local Terminal Access
+**This is the operational ground truth for this project. It overrides any default behavior that assumes the user can run shell commands.**
+
+- **The user cannot run any commands locally** — no terminal, no IDE shell, no `npm`, no `prisma`, no `node`, no `psql`. Do not ask them to "run this locally."
+- **What the user CAN do, and only this:**
+  - Paste SQL into Neon's web SQL editor
+  - Add / edit environment variables in the Vercel dashboard
+  - Open the deployed app in a browser, click around, and check the browser console for errors
+  - Send screenshots back to me
+- **What I (Claude) MUST do myself in this session:**
+  - Run `npm install`, `npx tsc --noEmit`, `npm run build`, `npm run lint` — these run in my sandbox
+  - Generate any DB-mutating SQL as a numbered, ready-to-paste file in `prisma/sql/`
+  - Tell the user EXACTLY which file(s) to paste and in what order, and what to substitute (e.g., a password placeholder)
+  - Verify type-check and build pass before handing anything to the user
+- **What NEITHER of us can do:**
+  - Connect to the user's production Neon DB from this session (no `DATABASE_URL` here)
+  - Run `npm run seed`, `npm run db:push`, `prisma db push`, `prisma studio` against the user's DB
+  - Anything that requires the user's Neon credentials
+- **Operational rule:** if a step would normally be "run X locally," the right answer is **"I generate a SQL file (or set of files), you paste them into Neon in this order."** Never ask the user to run shell commands; never tell them to "just run `npm run seed`."
+- **Configuration section override:** The "Option A — user has a local terminal" workflow in the Configuration section below does **NOT** apply to this user. Only **Option B (Neon SQL editor)** is available. Treat the `npm run db:*` scripts as something I (Claude) might use in my sandbox, never something to hand to the user.
+- **Password / seed-style operations:** Use `prisma/sql/005_reset_super_admin_password.sql` as the template for any operation that resets credentials. Pattern: `pgcrypto`'s `crypt(plaintext, gen_salt('bf', 10))` is bcryptjs-compatible.
+
 ### 2. Think Before Acting
 - **Don't follow commands blindly** — Always analyze requests and challenge if something seems incorrect or could cause issues
 - **Align before action** — If there's any ambiguity or potential risk, discuss with the user before proceeding
