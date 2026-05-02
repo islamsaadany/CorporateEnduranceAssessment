@@ -1,23 +1,5 @@
-// Filter banner + "Preliminary — N of M" banner. The Draft AI banner
-// (spec 05 § 2.3) lands in Phase 7 alongside the AI integration.
-
-interface FilterBannerProps {
-  description: string
-  matchingFilter: number
-}
-
-export function FilterBanner({ description, matchingFilter }: FilterBannerProps) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-brand-grey-light bg-brand-grey-soft-bg px-4 py-3">
-      <p className="text-sm text-brand-dark-blue">
-        <span className="font-medium">{description}</span>{' '}
-        <span className="text-brand-grey-text">
-          ({matchingFilter} respondent{matchingFilter === 1 ? '' : 's'})
-        </span>
-      </p>
-    </div>
-  )
-}
+// "Preliminary — N of M" banner. The Draft AI banner (spec 05 § 2.3)
+// lands in Phase 7. The filter banner moved to FilterControls in slice 6.3.
 
 interface PreliminaryBannerProps {
   matchingFilter: number

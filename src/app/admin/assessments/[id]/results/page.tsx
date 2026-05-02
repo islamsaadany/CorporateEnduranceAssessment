@@ -11,7 +11,8 @@ import { requireAdmin } from '@/lib/admin-guard'
 import { parseFilterFromSearchParams } from '@/lib/filters'
 import { loadResults } from '@/lib/results-service'
 
-import { FilterBanner, PreliminaryBanner } from './banners'
+import { PreliminaryBanner } from './banners'
+import { FilterControls } from './filter-controls'
 import { LockCard } from './lock-card'
 import { SummarySection } from './summary-section'
 import { CapabilityProfileSection } from './capability-profile-section'
@@ -64,11 +65,15 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
         </div>
       </div>
 
-      {/* Banner stack */}
+      {/* Filter controls + banner stack */}
       <div className="space-y-2">
-        <FilterBanner
-          description={bundle.filter.description}
+        <FilterControls
+          assessmentId={assessment.id}
+          currentFilter={bundle.filter.parsed}
           matchingFilter={counts.matchingFilter}
+          isCompanyWide={bundle.filter.isCompanyWide}
+          availableDepartments={bundle.availableDepartments}
+          allSubmittedDemos={bundle.allSubmittedDemos}
         />
         {assessment.status === 'collecting' ? (
           <PreliminaryBanner

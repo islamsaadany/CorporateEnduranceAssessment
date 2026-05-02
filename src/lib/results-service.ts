@@ -69,6 +69,16 @@ export interface ResultsBundle {
   lock: LockInfo | null
   aggregates: AggregatedResults | null
   respondents: RespondentRow[]
+  // ── Filter-UI metadata (slice 6.3) ───────────────────────────────────
+  // Always present, regardless of filter or lock state, so the filter
+  // modal can render chips and compute live preview counts even when the
+  // current filtered view is locked.
+  availableDepartments: string[]
+  allSubmittedDemos: Array<{
+    department: string | null
+    level: Level | null
+    tenure: TenureBand | null
+  }>
 }
 
 // Returns null when the assessment id doesn't exist. Caller decides
@@ -87,6 +97,10 @@ export async function loadResults(
       closedAt: true,
       code: true,
       maxUses: true,
+      // Defined departments for this assessment — even ones that no
+      // respondent has used. The filter modal needs the full list so it
+      // can render every department as a selectable chip.
+      departments: { select: { name: true }, orderBy: { name: 'asc' } },
     },
   })
   if (!assessment) return null
@@ -98,7 +112,23 @@ export async function loadResults(
     submittedAt: { not: null },
   } as const
 
-  const totalSubmitted = await prisma.respondent.count({ where: submittedScope })
+  // Demographics for ALL submitted respondents on this assessment,
+  // independent of the active filter. Drives the modal's live preview
+  // count without an extra round-trip.
+  const allSubmitted = await prisma.respondent.findMany({
+    where: submittedScope,
+    select: {
+      level: true,
+      tenure: true,
+      department: { select: { name: true } },
+    },
+  })
+  const allSubmittedDemos = allSubmitted.map((r) => ({
+    department: r.department?.name ?? null,
+    level: r.level,
+    tenure: r.tenure,
+  }))
+  const totalSubmitted = allSubmitted.length
 
   const matchingRespondents = await prisma.respondent.findMany({
     where: { ...submittedScope, ...prismaWhereForFilter(filter) },
@@ -113,6 +143,8 @@ export async function loadResults(
     orderBy: { submittedAt: 'asc' },
   })
   const matchingFilter = matchingRespondents.length
+
+  const availableDepartments = assessment.departments.map((d) => d.name)
 
   const filterMeta = {
     parsed: filter,
@@ -144,6 +176,8 @@ export async function loadResults(
       },
       aggregates: null,
       respondents: [],
+      availableDepartments,
+      allSubmittedDemos,
     }
   }
 
@@ -183,6 +217,8 @@ export async function loadResults(
     lock: null,
     aggregates,
     respondents,
+    availableDepartments,
+    allSubmittedDemos,
   }
 }
 

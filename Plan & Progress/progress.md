@@ -99,7 +99,13 @@ What's built and live on Vercel:
   - [x] Spec/code drift caught + fixed: `CapabilityResult` extended with `min`/`max` so the report can render "Range: 1.5 – 3.5" per spec 05 § 4.1 instead of just spread
   - [x] Tailwind config extended with brand palette per spec 12 § 1 (`brand-dark-blue`, `brand-ochre`, etc) + Georgia serif font; existing `ink/canvas/band` tokens kept intact for other admin pages
   - [x] "View report" link added to assessment detail page
-- [ ] **6.3** — Filter UI (department / level / tenure / compound); URL-state; live "matches N respondents" preview
+- [x] **6.3** — Filter UI (multi-select modal + active-chip row + URL-state)
+  - [x] `loadResults` extended with `availableDepartments` (admin-defined list, even with 0 respondents) and `allSubmittedDemos` (per-respondent department/level/tenure, no names) so the modal can render every selectable value and compute live preview counts in the browser without extra round-trips
+  - [x] `filterToQueryString` helper in `src/lib/filters.ts` — same canonical form as `filterSignature`, but empty string for company-wide so URLs don't carry a stray `?company_wide`
+  - [x] `filter-modal.tsx` (client) — three multi-select chip sections with Select-all/Clear; live preview "matches N respondents (anonymity floor met ✓)" turning red below 3; Apply enabled only on change; Cancel + Esc + backdrop close; "Clear all filters" link in footer; Apply allowed below floor (admin sees the lock card on the next page) per Q4
+  - [x] `filter-controls.tsx` (client) — chip row showing the active filter (`Sales × Manager × 4–7y · 14 respondents`) with × on each chip to drop a single value; "Change filter" button opens the modal; URL is the source of truth (`router.push` round-trips through the server)
+  - [x] Page wired — old standalone `FilterBanner` removed; `FilterControls` replaces it above the Preliminary banner
+  - [x] Type-check + production build green
 - [ ] **6.4** — Comparison view (two-filter side-by-side, quantitative only); both sides independently floor-checked
 
 ### Phase 7 — AI integration

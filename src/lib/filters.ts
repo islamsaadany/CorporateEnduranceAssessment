@@ -84,6 +84,14 @@ export function isCompanyWide(f: ParsedFilter): boolean {
   )
 }
 
+// URL query string for navigation: same canonical form as filterSignature
+// for non-empty filters, empty string for company-wide. The bare URL
+// (no `?`) is the canonical form for company-wide so links don't carry a
+// stray `?company_wide` suffix.
+export function filterToQueryString(f: ParsedFilter): string {
+  return isCompanyWide(f) ? '' : filterSignature(f)
+}
+
 // Human-readable phrase used in the report's filter banner and as a hint
 // in the AI prompt's filter_description field. Shape matches the examples
 // in product-spec/06 § 7.
