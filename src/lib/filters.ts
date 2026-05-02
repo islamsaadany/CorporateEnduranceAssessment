@@ -23,16 +23,26 @@ const VALID_TENURES = new Set<TenureBand>(TENURE_BANDS)
 // as no filter on that dimension"). Department names pass through verbatim;
 // the DB query simply returns 0 rows for unknown departments, which the
 // caller renders as "0 respondents match".
-export function parseFilterFromSearchParams(sp: URLSearchParams): ParsedFilter {
+//
+// `prefix` controls the URL parameter names. With `prefix=""` (default),
+// reads `dept`, `level`, `tenure`. With `prefix="a"`, reads `aDept`,
+// `aLevel`, `aTenure` — used by the comparison view (slice 6.4) where two
+// filters share a single URL.
+export function parseFilterFromSearchParams(sp: URLSearchParams, prefix = ''): ParsedFilter {
   return {
-    departments: splitMulti(sp.get('dept')),
-    levels: splitMulti(sp.get('level')).filter((v): v is Level =>
+    departments: splitMulti(sp.get(prefixedKey(prefix, 'dept'))),
+    levels: splitMulti(sp.get(prefixedKey(prefix, 'level'))).filter((v): v is Level =>
       VALID_LEVELS.has(v as Level),
     ),
-    tenures: splitMulti(sp.get('tenure')).filter((v): v is TenureBand =>
+    tenures: splitMulti(sp.get(prefixedKey(prefix, 'tenure'))).filter((v): v is TenureBand =>
       VALID_TENURES.has(v as TenureBand),
     ),
   }
+}
+
+function prefixedKey(prefix: string, base: 'dept' | 'level' | 'tenure'): string {
+  if (!prefix) return base
+  return prefix + base.charAt(0).toUpperCase() + base.slice(1)
 }
 
 function splitMulti(raw: string | null): string[] {
@@ -88,8 +98,26 @@ export function isCompanyWide(f: ParsedFilter): boolean {
 // for non-empty filters, empty string for company-wide. The bare URL
 // (no `?`) is the canonical form for company-wide so links don't carry a
 // stray `?company_wide` suffix.
-export function filterToQueryString(f: ParsedFilter): string {
-  return isCompanyWide(f) ? '' : filterSignature(f)
+//
+// `prefix` produces compare-style keys (`aDept`, `aLevel`, `aTenure`) for
+// use on the comparison view; the empty default produces single-filter
+// keys (`dept`, `level`, `tenure`).
+export function filterToQueryString(f: ParsedFilter, prefix = ''): string {
+  if (isCompanyWide(f)) return ''
+  const parts: string[] = []
+  if (f.departments.length > 0) {
+    const sorted = [...f.departments].sort()
+    parts.push(`${prefixedKey(prefix, 'dept')}=${sorted.map(encodeURIComponent).join(',')}`)
+  }
+  if (f.levels.length > 0) {
+    const sorted = [...f.levels].sort()
+    parts.push(`${prefixedKey(prefix, 'level')}=${sorted.join(',')}`)
+  }
+  if (f.tenures.length > 0) {
+    const sorted = [...f.tenures].sort()
+    parts.push(`${prefixedKey(prefix, 'tenure')}=${sorted.join(',')}`)
+  }
+  return parts.join('&')
 }
 
 // Human-readable phrase used in the report's filter banner and as a hint

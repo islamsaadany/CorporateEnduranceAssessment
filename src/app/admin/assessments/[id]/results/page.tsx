@@ -59,9 +59,17 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
           <h1 className="font-serif text-3xl font-bold text-brand-dark-blue">
             Results — {assessment.clientName}
           </h1>
-          <p className="text-sm text-brand-grey-text">
-            {assessment.status === 'closed' ? 'Closed' : 'Collecting'}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/admin/assessments/${assessment.id}/results/compare`}
+              className="rounded border border-brand-dark-blue bg-white px-3 py-1 text-xs font-medium text-brand-dark-blue transition hover:bg-brand-dark-blue hover:text-white"
+            >
+              Compare segments
+            </Link>
+            <p className="text-sm text-brand-grey-text">
+              {assessment.status === 'closed' ? 'Closed' : 'Collecting'}
+            </p>
+          </div>
         </div>
       </div>
 

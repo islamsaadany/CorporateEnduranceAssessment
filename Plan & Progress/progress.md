@@ -79,7 +79,7 @@ What's built and live on Vercel:
 - [x] Manual "Close now" admin button (audit-logged with `trigger:'manual'`)
 - [x] Live verified
 
-### Phase 6 — Numerical report (live)
+### Phase 6 — Numerical report (live) ✅
 **Slicing:** 6.1 aggregation engine + JSON API → 6.2 results page → 6.3 filter UI → 6.4 comparison view. Each slice gates on `npx tsc --noEmit` + `npm run build`.
 
 - [x] **6.1** — Aggregation engine + results JSON API
@@ -106,7 +106,15 @@ What's built and live on Vercel:
   - [x] `filter-controls.tsx` (client) — chip row showing the active filter (`Sales × Manager × 4–7y · 14 respondents`) with × on each chip to drop a single value; "Change filter" button opens the modal; URL is the source of truth (`router.push` round-trips through the server)
   - [x] Page wired — old standalone `FilterBanner` removed; `FilterControls` replaces it above the Preliminary banner
   - [x] Type-check + production build green
-- [ ] **6.4** — Comparison view (two-filter side-by-side, quantitative only); both sides independently floor-checked
+- [x] **6.4** — Comparison view (`/admin/assessments/[id]/results/compare`)
+  - [x] URL shape: prefixed query keys (`aDept=…&aLevel=…&bDept=…`) per Q1/A. `parseFilterFromSearchParams` and `filterToQueryString` both take an optional `prefix` argument; the comparison page passes `'a'` / `'b'`, the single-filter page leaves it default
+  - [x] Two `loadResults` calls in parallel (one per side); each side independently checked against the ≥3 floor — when one is locked, that column shows a "Locked" placeholder and the other still renders (spec 06 § 6.2)
+  - [x] Twin sections: Summary (twin overall + single-line "A leads by 0.40" delta per Q3/B), Pillar Breakdown (twin progress bars per pillar with per-pillar Δ), Capability Profile (twin bars per capability in canonical order, no spread sort), Focus Areas (twin top-5 lists with "Only in A" / "Only in B" badges for unique-to-one-side capabilities)
+  - [x] Twin filter pickers reuse the existing `FilterModal`, scoped per side via `openSide` state
+  - [x] "Exit comparison" link returns to `/results?<filter A>` per Q5 / spec 06 § 6.4
+  - [x] "Compare segments" button on the main results page header per Q4
+  - [x] No AI narrative comparison, no per-respondent table, no PDF export — quantitative only in v1 (spec 06 § 6.3)
+  - [x] Type-check + production build green; new route `/admin/assessments/[id]/results/compare` registered
 
 ### Phase 7 — AI integration
 - [ ] Settings table with AES-256 encrypted API keys
