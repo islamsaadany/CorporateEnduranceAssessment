@@ -210,7 +210,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
 
   let parsed: unknown
   try {
-    parsed = JSON.parse(raw)
+    parsed = JSON.parse(stripMarkdownFences(raw))
   } catch {
     throw new AiGenerationError('json_parse_failed', 'Provider returned non-JSON content.', {
       provider: resolved.provider,
@@ -246,6 +246,21 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Gemini (and occasionally Claude) sometimes wraps JSON output in
+ * ```json ... ``` despite explicit JSON-mode requests. Strip a single
+ * leading/trailing fence pair if present; leave un-fenced content alone.
+ * Slice 7.4's retry-on-parse-failure handles the case where the model
+ * emitted actual non-JSON prose.
+ */
+function stripMarkdownFences(raw: string): string {
+  const trimmed = raw.trim()
+  // Match ```<lang>?\n ... \n``` (lang optional, e.g. "json").
+  const match = /^```[a-zA-Z0-9]*\s*\n?([\s\S]*?)\n?```$/m.exec(trimmed)
+  if (match) return match[1].trim()
+  return trimmed
+}
 
 const LABEL_TO_KEY: Map<string, CapabilityKey> = new Map(
   CAPABILITY_ORDER.map((k) => [CAPABILITY_LABELS[k], k]),
