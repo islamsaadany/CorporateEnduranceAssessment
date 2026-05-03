@@ -17,6 +17,8 @@ export type AdminAction =
   | 'response.edit'
   | 'respondent.demographics_edit'
   | 'ai.generate'
+  | 'ai.generation_failed'
+  | 'ai.fallback_used'
   | 'ai.config_change'
   | 'admin.create'
   | 'admin.deactivate'

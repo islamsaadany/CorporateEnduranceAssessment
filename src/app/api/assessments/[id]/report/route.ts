@@ -3,28 +3,19 @@ import type { AiReportOutput } from '@/data/types'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logAdminAction } from '@/lib/audit'
-import {
-  AiConfigError,
-  AiGenerationError,
-  generateReport,
-  readCachedReport,
-  writeCachedReport,
-} from '@/lib/ai'
+import { generateReport, readCachedReport, writeCachedReport } from '@/lib/ai'
 import { parseFilterFromSearchParams } from '@/lib/filters'
 import { loadResults } from '@/lib/results-service'
 
 /**
  * AI report endpoint, keyed by `(assessmentId, filterSignature)`.
  *
- *   GET   → return cached row for the active filter, or 404 if none
- *   POST  → run generateReport(), upsert the cache row, audit-log
- *           ai.generate, return the row. Server enforces the ≥3
- *           anonymity floor + the assessment-exists gate. Pre-closure
- *           generations land as `isDraft=true`.
- *
- * Validation hardening (spec 14 § 4) + retry / fallback (spec 14 § 5)
- * are slice 7.4. This slice surfaces any error from generateReport()
- * directly to the caller for the moment.
+ *   GET   → return cached row for the active filter, or { cached: false }
+ *   POST  → run generateReport(); on success write cache + audit ai.generate;
+ *           on fallback DO NOT cache (per spec 14 § 5), audit
+ *           ai.generation_failed + ai.fallback_used, return the fallback
+ *           content with `kind: 'fallback'` so the client can render it
+ *           transiently with a Retry button.
  *
  * Cache invalidation on respondent edits is Phase 9.
  */
@@ -100,8 +91,7 @@ export async function POST(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 })
   }
 
-  // Server-side guardrails — the button on the report page is hidden
-  // when these are true, but defense in depth.
+  // Server-side guardrails — defense in depth (button is hidden client-side).
   if (bundle.lock || !bundle.aggregates) {
     return NextResponse.json(
       {
@@ -120,69 +110,93 @@ export async function POST(req: Request, { params }: Ctx) {
 
   const isDraft = bundle.assessment.status === 'collecting'
 
-  let result: Awaited<ReturnType<typeof generateReport>>
-  try {
-    result = await generateReport({
-      filterDescription: bundle.filter.description,
-      filterIsCompanyWide: bundle.filter.isCompanyWide,
-      matchingFilter: bundle.counts.matchingFilter,
-      totalSubmitted: bundle.counts.totalSubmitted,
-      assessmentStatus: bundle.assessment.status,
-      aggregates: bundle.aggregates,
-      respondents: bundle.respondents.map((r) => ({
-        name: r.name,
-        department: r.department,
-        level: r.level,
-        tenure: r.tenure,
-        capabilities: r.capabilities,
-      })),
-    })
-  } catch (err) {
-    if (err instanceof AiConfigError) {
-      return NextResponse.json(
-        { error: err.code, message: err.message },
-        { status: err.code === 'no_key_configured' ? 412 : 500 },
-      )
-    }
-    if (err instanceof AiGenerationError) {
-      return NextResponse.json(
-        { error: err.code, message: err.message, details: err.details ?? null },
-        { status: 502 },
-      )
-    }
-    return NextResponse.json(
-      { error: 'unknown', message: err instanceof Error ? err.message : 'unknown error' },
-      { status: 500 },
-    )
-  }
-
-  // Cache write per Q3/A — generateReport() is pure, the route persists.
-  // Q4/A — inputJson stores the *stripped* (letter-labeled) snapshot.
-  const row = await writeCachedReport({
-    assessmentId: id,
-    filterSignature: bundle.filter.signature,
-    isDraft,
-    promptVersion: result.promptVersion,
-    provider: result.provider,
-    inputJson: result.inputSnapshot as unknown as import('@prisma/client').Prisma.InputJsonValue,
-    outputJson: result.outputJson as unknown as import('@prisma/client').Prisma.InputJsonValue,
-    generatedById: session.user.id,
+  const outcome = await generateReport({
+    filterDescription: bundle.filter.description,
+    filterIsCompanyWide: bundle.filter.isCompanyWide,
+    matchingFilter: bundle.counts.matchingFilter,
+    totalSubmitted: bundle.counts.totalSubmitted,
+    assessmentStatus: bundle.assessment.status,
+    aggregates: bundle.aggregates,
+    respondents: bundle.respondents.map((r) => ({
+      name: r.name,
+      department: r.department,
+      level: r.level,
+      tenure: r.tenure,
+      capabilities: r.capabilities,
+    })),
   })
 
+  if (outcome.kind === 'success') {
+    // Q3/A — Q4/A: cache the *stripped* snapshot as the audit trail.
+    const row = await writeCachedReport({
+      assessmentId: id,
+      filterSignature: bundle.filter.signature,
+      isDraft,
+      promptVersion: outcome.promptVersion,
+      provider: outcome.provider,
+      inputJson: outcome.inputSnapshot as unknown as import('@prisma/client').Prisma.InputJsonValue,
+      outputJson: outcome.outputJson as unknown as import('@prisma/client').Prisma.InputJsonValue,
+      generatedById: session.user.id,
+    })
+    await logAdminAction({
+      actorAdminId: session.user.id,
+      assessmentId: id,
+      action: 'ai.generate',
+      metadata: {
+        filterSignature: bundle.filter.signature,
+        filterDescription: bundle.filter.description,
+        provider: outcome.provider,
+        model: outcome.model,
+        promptVersion: outcome.promptVersion,
+        isDraft,
+        sampleSize: bundle.counts.matchingFilter,
+        attempts: outcome.attempts,
+        // Q1/A: granular per-call quality signals.
+        softFixes: outcome.softFixes,
+      },
+    })
+    return NextResponse.json({ kind: 'success', report: await serializeRow(row) })
+  }
+
+  // Fallback path — DO NOT cache. Audit two events so the activity log
+  // tells the full story: the failure and the recovery.
   await logAdminAction({
     actorAdminId: session.user.id,
     assessmentId: id,
-    action: 'ai.generate',
+    action: 'ai.generation_failed',
     metadata: {
       filterSignature: bundle.filter.signature,
       filterDescription: bundle.filter.description,
-      provider: result.provider,
-      model: result.model,
-      promptVersion: result.promptVersion,
+      provider: outcome.provider,
+      attempts: outcome.attempts,
+      reason: outcome.reason,
+      attemptReasons: outcome.attemptReasons,
       isDraft,
       sampleSize: bundle.counts.matchingFilter,
     },
   })
+  await logAdminAction({
+    actorAdminId: session.user.id,
+    assessmentId: id,
+    action: 'ai.fallback_used',
+    metadata: {
+      filterSignature: bundle.filter.signature,
+      filterDescription: bundle.filter.description,
+      provider: outcome.provider,
+      reason: outcome.reason,
+      overallBand: bundle.aggregates.overall.band,
+      isDraft,
+    },
+  })
 
-  return NextResponse.json({ cached: true, report: await serializeRow(row) })
+  return NextResponse.json({
+    kind: 'fallback',
+    fallback: {
+      outputJson: outcome.outputJson,
+      provider: outcome.provider,
+      reason: outcome.reason,
+      attempts: outcome.attempts,
+      isDraft,
+    },
+  })
 }

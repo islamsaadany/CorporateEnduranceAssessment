@@ -10,7 +10,6 @@
  * 7.3 can hook up the endpoint and 7.4 can layer on the strict rules.
  */
 
-import { CAPABILITY_LABELS, CAPABILITY_ORDER } from '@/data/constants'
 import type { AiReportOutput, CapabilityKey } from '@/data/types'
 import { prisma } from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto'
@@ -18,6 +17,7 @@ import { claudeAdapter } from './claude'
 import { geminiAdapter } from './gemini'
 import { openaiAdapter } from './openai'
 import { buildPrompt } from './prompt'
+import { buildFallback } from './fallback'
 import {
   aiResponseSchema,
   type GenerateReportInput,
@@ -25,6 +25,7 @@ import {
   type ProviderAdapter,
   type TestConnectionResult,
 } from './types'
+import { validate } from './validate'
 
 const ENV_VAR_FOR: Record<Provider, string> = {
   gemini: 'GEMINI_API_KEY',
@@ -161,87 +162,204 @@ export async function testConnection(
 
 // ─── Generation ──────────────────────────────────────────────────────────
 
-export interface GenerateReportResult {
-  outputJson: AiReportOutput
-  /**
-   * The raw stripped+rendered prompt input — slice 7.3 stores this in
-   * `GeneratedReport.inputJson` per Q4/A (audit trail uses the
-   * already-anonymized version, not the pre-strip).
-   */
-  inputSnapshot: {
-    filterDescription: string
-    matchingFilter: number
-    totalSubmitted: number
-    assessmentStatus: 'collecting' | 'closed'
-    promptSystem: string
-    promptUser: string
-    anonymizedRespondents: import('./strip-names').AnonymizedRespondent[]
-  }
-  provider: Provider
-  model: string
-  promptVersion: number
+export interface InputSnapshot {
+  filterDescription: string
+  matchingFilter: number
+  totalSubmitted: number
+  assessmentStatus: 'collecting' | 'closed'
+  promptSystem: string
+  promptUser: string
+  anonymizedRespondents: import('./strip-names').AnonymizedRespondent[]
 }
 
 /**
- * End-to-end: resolve provider → build prompt → call provider → parse JSON
- * → coerce into `AiReportOutput` shape.
+ * Discriminated outcome returned by `generateReport()`.
  *
- * Slice 7.2 contract: throws on any failure (decryption, network, JSON
- * parse). Slice 7.4 will wrap this in retry + fallback logic.
+ *   kind: 'success'  → cache it, return to UI, audit `ai.generate` with
+ *                      the list of soft fixes applied (Q1/A audit detail).
+ *   kind: 'fallback' → DO NOT cache (per spec 14 § 5). Return baseline
+ *                      summary + baseline action items to the UI. Audit
+ *                      both `ai.generation_failed` (carrying the per-attempt
+ *                      reasons) and `ai.fallback_used`.
  */
-export async function generateReport(input: GenerateReportInput): Promise<GenerateReportResult> {
-  const resolved = await resolveActiveProvider()
+export type GenerateReportOutcome =
+  | {
+      kind: 'success'
+      outputJson: AiReportOutput
+      inputSnapshot: InputSnapshot
+      provider: Provider
+      model: string
+      promptVersion: number
+      softFixes: import('./validate').SoftFix[]
+      attempts: 1 | 2
+    }
+  | {
+      kind: 'fallback'
+      outputJson: AiReportOutput
+      provider: Provider | null
+      attempts: number
+      reason: string
+      attemptReasons: string[]
+    }
+
+/**
+ * End-to-end: resolve provider → build prompt → call provider → parse JSON
+ * → run spec-14 § 4 validators → on hard fail, retry once with augmented
+ * prompt → on second hard fail, return baseline fallback (not cached).
+ *
+ * Soft fixes (truncation, em-dash replace, emoji strip, single-numeric
+ * sentence strip) are applied in place on the successful path and reported
+ * via `softFixes` for audit.
+ */
+export async function generateReport(input: GenerateReportInput): Promise<GenerateReportOutcome> {
+  let resolved: ResolvedProvider
+  try {
+    resolved = await resolveActiveProvider()
+  } catch (err) {
+    // Config errors (no key, decryption failed) → fallback. There's no
+    // useful retry without a working key.
+    const reason = err instanceof Error ? err.message : 'unknown'
+    return {
+      kind: 'fallback',
+      outputJson: buildFallback({
+        overallBand: input.aggregates.overall.band,
+        matchingFilter: input.matchingFilter,
+        totalSubmitted: input.totalSubmitted,
+        focusAreas: input.aggregates.focusAreas,
+      }),
+      provider: null,
+      attempts: 0,
+      reason: 'ai_unavailable',
+      attemptReasons: [reason],
+    }
+  }
+
   const prompt = buildPrompt(input)
 
+  // Attempt 1
+  const a1 = await callAndValidate({
+    system: prompt.system,
+    user: prompt.user,
+    apiKey: resolved.apiKey,
+    provider: resolved.provider,
+    focusAreas: input.aggregates.focusAreas,
+  })
+  if (a1.ok) {
+    return {
+      kind: 'success',
+      outputJson: a1.output,
+      inputSnapshot: snapshot(input, prompt),
+      provider: resolved.provider,
+      model: resolved.model,
+      promptVersion: resolved.promptVersion,
+      softFixes: a1.softFixes,
+      attempts: 1,
+    }
+  }
+
+  // Attempt 2 — augment the user prompt with the violation note so the
+  // model knows why the first attempt was rejected.
+  const augmentedUser = `${prompt.user}\n\nIMPORTANT: A previous attempt was rejected for this reason: ${a1.detail}\nPlease produce a response that fixes this issue while still conforming to the JSON schema above.`
+  const a2 = await callAndValidate({
+    system: prompt.system,
+    user: augmentedUser,
+    apiKey: resolved.apiKey,
+    provider: resolved.provider,
+    focusAreas: input.aggregates.focusAreas,
+  })
+  if (a2.ok) {
+    return {
+      kind: 'success',
+      outputJson: a2.output,
+      inputSnapshot: snapshot(input, prompt),
+      provider: resolved.provider,
+      model: resolved.model,
+      promptVersion: resolved.promptVersion,
+      softFixes: a2.softFixes,
+      attempts: 2,
+    }
+  }
+
+  // Both attempts hard-failed — fall back. Per spec 14 § 5 do NOT cache.
+  return {
+    kind: 'fallback',
+    outputJson: buildFallback({
+      overallBand: input.aggregates.overall.band,
+      matchingFilter: input.matchingFilter,
+      totalSubmitted: input.totalSubmitted,
+      focusAreas: input.aggregates.focusAreas,
+    }),
+    provider: resolved.provider,
+    attempts: 2,
+    reason: 'validation_failed_after_retry',
+    attemptReasons: [a1.reason, a2.reason],
+  }
+}
+
+interface CallAndValidateInput {
+  system: string
+  user: string
+  apiKey: string
+  provider: Provider
+  focusAreas: CapabilityKey[]
+}
+
+type CallAndValidateResult =
+  | { ok: true; output: AiReportOutput; softFixes: import('./validate').SoftFix[] }
+  | { ok: false; reason: string; detail: string }
+
+async function callAndValidate(input: CallAndValidateInput): Promise<CallAndValidateResult> {
   let raw: string
   try {
-    raw = await ADAPTERS[resolved.provider].generate({
-      system: prompt.system,
-      user: prompt.user,
-      apiKey: resolved.apiKey,
+    raw = await ADAPTERS[input.provider].generate({
+      system: input.system,
+      user: input.user,
+      apiKey: input.apiKey,
     })
   } catch (err) {
-    throw new AiGenerationError(
-      'provider_call_failed',
-      err instanceof Error ? err.message : 'unknown error',
-      { provider: resolved.provider },
-    )
+    return {
+      ok: false,
+      reason: 'provider_call_failed',
+      detail: err instanceof Error ? err.message : 'unknown error',
+    }
   }
 
   let parsed: unknown
   try {
     parsed = JSON.parse(stripMarkdownFences(raw))
   } catch {
-    throw new AiGenerationError('json_parse_failed', 'Provider returned non-JSON content.', {
-      provider: resolved.provider,
-      rawPreview: raw.slice(0, 300),
-    })
+    return {
+      ok: false,
+      reason: 'json_parse_failed',
+      detail: 'Provider returned non-JSON content.',
+    }
   }
 
-  const validated = aiResponseSchema.safeParse(parsed)
-  if (!validated.success) {
-    throw new AiGenerationError('schema_mismatch', 'Provider response did not match the expected JSON shape.', {
-      provider: resolved.provider,
-      issues: validated.error.flatten(),
-    })
+  const shape = aiResponseSchema.safeParse(parsed)
+  if (!shape.success) {
+    return {
+      ok: false,
+      reason: 'shape_mismatch',
+      detail: `Top-level shape is wrong (expected { executive_summary: string, action_items: object }).`,
+    }
   }
 
-  const outputJson = mapToAiReportOutput(validated.data, input.aggregates.focusAreas)
+  const validated = validate(shape.data, input.focusAreas)
+  if (!validated.ok) {
+    return { ok: false, reason: validated.reason, detail: validated.detail }
+  }
+  return { ok: true, output: validated.output, softFixes: validated.softFixes }
+}
 
+function snapshot(input: GenerateReportInput, prompt: ReturnType<typeof buildPrompt>): InputSnapshot {
   return {
-    outputJson,
-    inputSnapshot: {
-      filterDescription: input.filterDescription,
-      matchingFilter: input.matchingFilter,
-      totalSubmitted: input.totalSubmitted,
-      assessmentStatus: input.assessmentStatus,
-      promptSystem: prompt.system,
-      promptUser: prompt.user,
-      anonymizedRespondents: prompt.anonymizedRespondents,
-    },
-    provider: resolved.provider,
-    model: resolved.model,
-    promptVersion: resolved.promptVersion,
+    filterDescription: input.filterDescription,
+    matchingFilter: input.matchingFilter,
+    totalSubmitted: input.totalSubmitted,
+    assessmentStatus: input.assessmentStatus,
+    promptSystem: prompt.system,
+    promptUser: prompt.user,
+    anonymizedRespondents: prompt.anonymizedRespondents,
   }
 }
 
@@ -251,8 +369,6 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
  * Gemini (and occasionally Claude) sometimes wraps JSON output in
  * ```json ... ``` despite explicit JSON-mode requests. Strip a single
  * leading/trailing fence pair if present; leave un-fenced content alone.
- * Slice 7.4's retry-on-parse-failure handles the case where the model
- * emitted actual non-JSON prose.
  */
 function stripMarkdownFences(raw: string): string {
   const trimmed = raw.trim()
@@ -262,58 +378,17 @@ function stripMarkdownFences(raw: string): string {
   return trimmed
 }
 
-const LABEL_TO_KEY: Map<string, CapabilityKey> = new Map(
-  CAPABILITY_ORDER.map((k) => [CAPABILITY_LABELS[k], k]),
-)
-
-/**
- * The LLM emits action_items keyed by capability *labels* ("Decision
- * Velocity"); our internal AiReportOutput stores them keyed by the
- * snake_case `CapabilityKey`. Maps + drops anything that doesn't match a
- * known label or wasn't in the focus-area set.
- *
- * Validation that the keys MATCH the focus areas exactly is deferred to
- * slice 7.4 — for now we just produce the cleanest possible mapping from
- * what the model returned.
- */
-function mapToAiReportOutput(
-  raw: { executive_summary: string; action_items: Record<string, string[]> },
-  focusAreas: CapabilityKey[],
-): AiReportOutput {
-  const focusSet = new Set(focusAreas)
-  const focusAreaActions: AiReportOutput['focusAreaActions'] = []
-  for (const [label, actions] of Object.entries(raw.action_items)) {
-    const key = LABEL_TO_KEY.get(label)
-    if (!key || !focusSet.has(key)) continue
-    focusAreaActions.push({ capability: key, actions })
-  }
-  // Preserve the focus-area order so the UI renders ranked.
-  focusAreaActions.sort(
-    (a, b) => focusAreas.indexOf(a.capability) - focusAreas.indexOf(b.capability),
-  )
-  return {
-    executiveSummary: raw.executive_summary,
-    focusAreaActions,
-  }
-}
-
 // ─── Errors ──────────────────────────────────────────────────────────────
 
+/**
+ * Config errors are caught inside `generateReport` and converted to a
+ * fallback outcome. They're still exported so the test endpoint and the
+ * settings UI can distinguish "no key" from other failures explicitly.
+ */
 export class AiConfigError extends Error {
   constructor(public code: 'no_key_configured' | 'decryption_failed', message: string) {
     super(message)
     this.name = 'AiConfigError'
-  }
-}
-
-export class AiGenerationError extends Error {
-  constructor(
-    public code: 'provider_call_failed' | 'json_parse_failed' | 'schema_mismatch',
-    message: string,
-    public details?: Record<string, unknown>,
-  ) {
-    super(message)
-    this.name = 'AiGenerationError'
   }
 }
 
