@@ -65,7 +65,7 @@ Full-width panel, dark blue background (`#0B2545`), white text. The first thing 
 **Left column (hero score):**
 - Eyebrow: `TEAM ENDURANCE SCORE` in `ochre`, ALL CAPS, letter-spaced
 - Large numeral (~90px Georgia bold): the team overall score to 2 decimal places — e.g., `3.03`
-- Subtle `/ 5.00` underneath in 24px
+- Subtle `/ 4.00` underneath in 24px
 - Band label in `ochre`: `SOLID` (or whatever band)
 - One-line interpretation:
   - From AI executive summary (when AI report cached for this filter), OR
@@ -79,15 +79,15 @@ Three rows, one per pillar (in order Agility → Toughness → Resilience):
 - Verb pair underneath in 13px ochre: *"Sense and move"* / *"Absorb and hold"* / *"Recover and renew"*
 - Team score numeral (e.g., `2.60`) in 36px Georgia, color-coded by band
 - Band label small caps, color-coded
-- Horizontal progress bar — track in `dark-blue-soft`, fill colored by band, width = `score / 5`
+- Horizontal progress bar — track in `dark-blue-soft`, fill colored by band, width = `score / 4`
 
 ### 3.2 Bottom of section — band legend
 
 Four-band horizontal legend strip:
-- `Critical Gap (1.00–1.99)` — red dot, label
-- `Needs Work (2.00–2.99)` — orange dot, label
-- `Solid (3.00–3.99)` — ochre dot, label
-- `Strong (4.00–5.00)` — green dot, label
+- `Critical Gap (1.00–1.74)` — red dot, label
+- `Needs Work (1.75–2.49)` — orange dot, label
+- `Solid (2.50–3.24)` — ochre dot, label
+- `Strong (3.25–4.00)` — green dot, label
 
 ### 3.3 Mobile layout
 
@@ -109,7 +109,7 @@ Three columns side by side, one per pillar (mobile: stacked vertically).
 
 **5 capability rows** within each column:
 - Each capability row has:
-  - Small horizontal score bar (10px tall, color by band, width by score/5)
+  - Small horizontal score bar (10px tall, color by band, width by score/4)
   - Capability name (16px sans, `dark-blue`)
   - Score numeral (1 decimal place — e.g., `2.0`) on the right
   - **Spread indicator**: when spread > 1.0, a subtle text below the row reads `Range: 1.5 – 3.5` in `grey-text`, 12px italic. Optionally a small "team is split" badge in `ochre-soft` for high spread (> 1.5).
@@ -273,3 +273,4 @@ For terminology used here, see `13_glossary.md`:
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-04-28 | Initial extraction from `ENDURANCE_ASSESSMENT_SPEC.md` v1.0 section 9, expanded with banner stack, comparison view, AI cache states, edit-mode controls. |
+| 0.2 | 2026-04-30 | Drift fix — corrected scale (`/ 4.00`, not `/ 5.00`), band legend ranges (1.00–1.74 / 1.75–2.49 / 2.50–3.24 / 3.25–4.00), and bar widths (`score/4`) to match the 1–4 Likert and quartile bands defined in `03_scoring_and_bands.md`. |

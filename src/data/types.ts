@@ -43,30 +43,53 @@ export interface QuestionDef {
   text: string
 }
 
-// Filter parsed from URLSearchParams. All fields optional → "no filter".
-// `compound` is just multiple fields set at once.
+// Filter parsed from URLSearchParams. All dimensions are multi-select per
+// product-spec/06 § 1; an empty array means "all" on that dimension.
+// Filter signature serializes this back out as `dept=A,B&level=manager`
+// (sorted, canonical) — see src/lib/filters.ts.
 export interface ParsedFilter {
-  department?: string // department name (we filter by name, not id, for portability across regenerated ids)
-  level?: import('@prisma/client').Level
-  tenure?: import('@prisma/client').TenureBand
+  departments: string[] // department names (filtered by name, not id)
+  levels: import('@prisma/client').Level[]
+  tenures: import('@prisma/client').TenureBand[]
 }
 
+// One capability's team result. `score`/`spread`/`band` are null when
+// fewer than 3 respondents in the active filter rated this capability
+// (per-capability anonymity floor — product-spec/03 § 3.1).
 export interface CapabilityResult {
-  score: number // mean across respondents in filter
-  spread: number // max − min across respondents in filter
+  score: number | null
+  spread: number | null
+  // min and max of the individual capability scores across respondents in
+  // the active filter. Used to render "Range: 1.5 – 3.5" per spec 05 § 4.1
+  // without forcing the UI to recompute. null when insufficient.
+  min: number | null
+  max: number | null
+  ratedCount: number
+  insufficient: boolean
+  band: BandKey | null
+}
+
+// One pillar's team result. `score` is null only in the extreme edge case
+// where no individual in the filter has a pillar score (every respondent
+// picked "I don't know" for both angles of every capability in the pillar).
+export interface PillarResult {
+  score: number | null
+  ratedCount: number
+  band: BandKey | null
 }
 
 export interface AggregatedResults {
+  // Total submitted respondents in the active filter — INCLUDING ones who
+  // contributed no rated answers. Used for the "Preliminary — N of M" banner
+  // and the ≥3 anonymity floor check.
   sampleSize: number
-  overall: number
-  pillars: Record<PillarKey, number>
+  overall: { score: number | null; band: BandKey | null }
+  pillars: Record<PillarKey, PillarResult>
   capabilities: Record<CapabilityKey, CapabilityResult>
-  focusAreas: CapabilityKey[] // top-5 weakest, see product-spec/03 for tie-break rule
-  bands: {
-    overall: BandKey
-    pillars: Record<PillarKey, BandKey>
-    capabilities: Record<CapabilityKey, BandKey>
-  }
+  // Top-5 weakest capabilities under the filter. Tie-break: spread desc,
+  // then alphabetical by display label. Capabilities with insufficient
+  // data are excluded — see product-spec/03 § 6.
+  focusAreas: CapabilityKey[]
 }
 
 // Shape of a generated AI report (stored in GeneratedReport.outputJson).

@@ -184,38 +184,53 @@ Aggregations are **always recomputed** from raw responses; they are not denormal
 
 ## 8. Worked example (sample data)
 
-Used for testing the results page. Five respondents (A–E), with the following individual scores:
+Used for testing the results page. Five respondents (A–E) who each rated all 30 statements (no "I don't know" answers in this example, for arithmetic clarity). The cells below are individual **capability** scores (mean of two angle ratings each, so values fall on `1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0`).
 
 | Capability | A | B | C | D | E | **Team mean** | **Spread** | **Band** |
 |------------|---|---|---|---|---|---------------|------------|----------|
 | Decision Velocity | 1.5 | 2.5 | 1.5 | 2.0 | 2.5 | 2.00 | 1.0 | Needs Work |
-| Market & Signal Intelligence | 2.0 | 3.0 | 2.5 | 2.5 | 2.5 | 2.50 | 1.0 | Needs Work |
+| Market & Signal Intelligence | 2.0 | 3.0 | 2.0 | 2.5 | 2.5 | 2.40 | 1.0 | Needs Work |
 | Adaptive Governance | 1.5 | 2.0 | 2.0 | 2.5 | 2.0 | 2.00 | 1.0 | Needs Work |
-| Experimentation Muscle | 3.0 | 3.5 | 3.5 | 3.0 | 3.5 | 3.30 | 0.5 | Solid |
+| Experimentation Muscle | 3.0 | 3.5 | 3.5 | 3.0 | 3.5 | 3.30 | 0.5 | Strong |
 | Delegation & Empowerment | 3.0 | 3.5 | 3.0 | 3.0 | 3.5 | 3.20 | 0.5 | Solid |
-| Leadership Strength Under Pressure | 4.0 | 4.0 | 3.5 | 4.0 | 4.5 | 4.00 | 1.0 | Strong |
-| Financial Shock Absorption | 4.0 | 3.5 | 4.0 | 4.0 | 4.0 | 3.90 | 0.5 | Solid |
-| Operational Continuity | 3.5 | 4.0 | 3.5 | 4.0 | 3.5 | 3.70 | 0.5 | Solid |
-| Risk & Compliance Discipline | 4.5 | 4.0 | 4.0 | 4.5 | 4.0 | 4.20 | 0.5 | Strong |
-| Trust & Collaboration | 3.5 | 4.0 | 3.5 | 3.5 | 4.0 | 3.70 | 0.5 | Solid |
+| Leadership Strength Under Pressure | 3.5 | 4.0 | 3.5 | 4.0 | 4.0 | 3.80 | 0.5 | Strong |
+| Financial Shock Absorption | 4.0 | 3.5 | 4.0 | 4.0 | 4.0 | 3.90 | 0.5 | Strong |
+| Operational Continuity | 3.5 | 4.0 | 3.5 | 4.0 | 3.5 | 3.70 | 0.5 | Strong |
+| Risk & Compliance Discipline | 4.0 | 4.0 | 4.0 | 4.0 | 4.0 | 4.00 | 0.0 | Strong |
+| Trust & Collaboration | 3.5 | 4.0 | 3.5 | 3.5 | 4.0 | 3.70 | 0.5 | Strong |
 | System Recoverability | 3.5 | 3.0 | 3.0 | 3.5 | 3.0 | 3.20 | 0.5 | Solid |
-| Culture of Grit & Ownership | 2.5 | 3.0 | 3.0 | 2.5 | 3.0 | 2.80 | 0.5 | Needs Work |
+| Culture of Grit & Ownership | 2.5 | 3.0 | 3.0 | 2.5 | 3.0 | 2.80 | 0.5 | Solid |
 | Learning Discipline | 1.5 | 2.5 | 2.0 | 2.0 | 2.0 | 2.00 | 1.0 | Needs Work |
-| Strategic Adaptability | 2.5 | 3.0 | 2.5 | 3.0 | 3.0 | 2.80 | 0.5 | Needs Work |
+| Strategic Adaptability | 2.5 | 3.0 | 2.5 | 3.0 | 3.0 | 2.80 | 0.5 | Solid |
 | Offensive Readiness | 1.0 | 1.5 | 2.0 | 1.5 | 1.5 | 1.50 | 1.0 | Critical Gap |
 
-### Pillar means
-- **Agility:** 2.60 (Needs Work)
-- **Toughness:** 3.90 (Solid)
-- **Resilience:** 2.60 (Needs Work)
-- **Overall:** 3.03 (Solid)
+### Individual pillar and overall scores
 
-### Top-5 focus areas
-1. Offensive Readiness — 1.50 (Critical Gap)
-2. Decision Velocity — 2.00 (Needs Work) — tied with two others below; spread = 1.0 → ranks first by name alphabetical secondary tie-break
-3. Adaptive Governance — 2.00 (Needs Work)
-4. Learning Discipline — 2.00 (Needs Work)
-5. Market & Signal Intelligence — 2.50 (Needs Work)
+| Respondent | Agility | Toughness | Resilience | Overall |
+|------------|---------|-----------|------------|---------|
+| A | 2.20 | 3.70 | 2.20 | 2.70 |
+| B | 2.90 | 3.90 | 2.60 | 3.13 |
+| C | 2.40 | 3.70 | 2.50 | 2.87 |
+| D | 2.60 | 3.90 | 2.50 | 3.00 |
+| E | 2.80 | 3.90 | 2.50 | 3.07 |
+
+### Team pillar and overall means
+- **Agility:** 2.58 (Solid) — mean of individual Agility scores
+- **Toughness:** 3.82 (Strong) — mean of individual Toughness scores
+- **Resilience:** 2.46 (Needs Work) — mean of individual Resilience scores
+- **Overall:** 2.95 (Solid) — mean of individual Overall scores
+
+(In this example, with no "I don't know" answers, mean-of-individual-pillars and mean-of-team-pillars produce the same number — `2.95` either way. They diverge only when "I don't know" answers are unevenly distributed across pillars; per § 3.3, the team overall is defined as the mean of individual overalls.)
+
+### Top-5 focus areas (rank 01 = weakest)
+
+Sort capability scores ascending; tie-break by spread descending, then alphabetical:
+
+1. **Offensive Readiness** — 1.50 (Critical Gap), spread 1.0
+2. **Adaptive Governance** — 2.00 (Needs Work), spread 1.0  *(tied at 2.00 with spread 1.0; alphabetical breaks the tie)*
+3. **Decision Velocity** — 2.00 (Needs Work), spread 1.0
+4. **Learning Discipline** — 2.00 (Needs Work), spread 1.0
+5. **Market & Signal Intelligence** — 2.40 (Needs Work), spread 1.0
 
 This sample profile is the canonical seed data for development testing. See `Plan & Progress/execution-plan.md` Phase 1.
 
@@ -230,7 +245,9 @@ This sample profile is the canonical seed data for development testing. See `Pla
 | Filtered subset has 0–2 respondents | Filter view replaced with lock message; admin can clear filter to return to company-wide. |
 | Two capabilities tied by score and spread | Alphabetical secondary tie-break (capability name, A→Z). |
 | All capability scores identical | Ranking still produced via alphabetical fallback; report still meaningful via pillar context. |
-| Respondent submits with all `5`s | Valid — produces overall score 5.00, banded "Strong". No anti-acquiescence detection in v1. |
+| Respondent submits with all `4`s | Valid — produces overall score 4.00, banded "Strong". No anti-acquiescence detection in v1. |
+| Respondent submits with all `1`s | Valid — produces overall score 1.00, banded "Critical Gap". |
+| Respondent picks "I don't know" for every question | Their row has no capability, pillar, or overall score; they don't contribute to any team aggregation, but they still count toward total submitted respondents and the headline N. |
 
 ---
 
@@ -246,3 +263,4 @@ For terminology used here, see `13_glossary.md`:
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-04-28 | Initial extraction from `ENDURANCE_ASSESSMENT_SPEC.md` v1.0. |
+| 0.2 | 2026-04-30 | Drift fix — § 8 worked example was from the 1–5 era (capability cells > 4.00, Resilience pillar mean inconsistent with row sums). Rebuilt the example with realistic 1–4 values, added a per-respondent pillar/overall table for traceability, and recomputed the top-5 focus areas under the documented tie-break rules. § 9 edge case "all 5s" replaced with "all 4s" / "all 1s" / "all I don't know" to match the 1–4 Likert. |

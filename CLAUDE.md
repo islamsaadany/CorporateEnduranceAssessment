@@ -31,6 +31,28 @@
 - **After ANY UI change, save a snapshot of the changed file to `ui-versions/` folder (see UI Version Tracking below)**
 - **This rule exists because previous sessions have accidentally reverted agreed-upon designs**
 
+### 1d. CRITICAL: User Has No Local Terminal Access
+**This is the operational ground truth for this project. It overrides any default behavior that assumes the user can run shell commands.**
+
+- **The user cannot run any commands locally** — no terminal, no IDE shell, no `npm`, no `prisma`, no `node`, no `psql`. Do not ask them to "run this locally."
+- **What the user CAN do, and only this:**
+  - Paste SQL into Neon's web SQL editor
+  - Add / edit environment variables in the Vercel dashboard
+  - Open the deployed app in a browser, click around, and check the browser console for errors
+  - Send screenshots back to me
+- **What I (Claude) MUST do myself in this session:**
+  - Run `npm install`, `npx tsc --noEmit`, `npm run build`, `npm run lint` — these run in my sandbox
+  - Generate any DB-mutating SQL as a numbered, ready-to-paste file in `prisma/sql/`
+  - Tell the user EXACTLY which file(s) to paste and in what order, and what to substitute (e.g., a password placeholder)
+  - Verify type-check and build pass before handing anything to the user
+- **What NEITHER of us can do:**
+  - Connect to the user's production Neon DB from this session (no `DATABASE_URL` here)
+  - Run `npm run seed`, `npm run db:push`, `prisma db push`, `prisma studio` against the user's DB
+  - Anything that requires the user's Neon credentials
+- **Operational rule:** if a step would normally be "run X locally," the right answer is **"I generate a SQL file (or set of files), you paste them into Neon in this order."** Never ask the user to run shell commands; never tell them to "just run `npm run seed`."
+- **Configuration section override:** The "Option A — user has a local terminal" workflow in the Configuration section below does **NOT** apply to this user. Only **Option B (Neon SQL editor)** is available. Treat the `npm run db:*` scripts as something I (Claude) might use in my sandbox, never something to hand to the user.
+- **Password / seed-style operations:** Use `prisma/sql/005_reset_super_admin_password.sql` as the template for any operation that resets credentials. Pattern: `pgcrypto`'s `crypt(plaintext, gen_salt('bf', 10))` is bcryptjs-compatible.
+
 ### 2. Think Before Acting
 - **Don't follow commands blindly** — Always analyze requests and challenge if something seems incorrect or could cause issues
 - **Align before action** — If there's any ambiguity or potential risk, discuss with the user before proceeding
@@ -372,9 +394,10 @@ Each capability has **two statements** (angle A, angle B). **1–4 Likert + "I d
 
 ### Scoring (server-side, Phase 6)
 - **Capability score (per respondent)** = mean of its rated answers (1–4). If both angles are "I don't know", the respondent doesn't contribute to that capability.
-- **Pillar score** = mean of the 5 available capability scores
-- **Overall endurance** = mean of the 3 available pillar scores
-- **Spread** = max − min of a capability across respondents (within the active filter)
+- **Pillar score (per respondent)** = mean of the available capability scores within that pillar (skipping capabilities where both angles were "I don't know").
+- **Overall score (per respondent)** = mean of the available pillar scores.
+- **Team capability / team pillar / team overall** = mean of the available *individual* scores at each level. Specifically: team overall is the mean of individual overall scores, **not** the mean of the 3 team pillar scores. The two only match when "I don't know" answers are evenly distributed across pillars; the per-individual mean is the rigorous form per `product-spec/03_scoring_and_bands.md` § 3.
+- **Spread** = max − min of a capability's individual scores across respondents (within the active filter).
 - All means re-aggregate across respondents within the **currently applied filter** (none / department / level / tenure / compound)
 - A capability needs ≥3 rated answers across the filter to display a score (else "Insufficient data" — per-capability anonymity floor)
 
@@ -414,9 +437,9 @@ Two filters side-by-side, **quantitative only** (no twin AI narratives in v1). B
 
 ---
 
-*Last Updated: 2026-04-29 (post-Phase 5)*
+*Last Updated: 2026-05-02 (Phase 6 complete)*
 
-### Built so far (as of 2026-04-29)
+### Built so far (as of 2026-05-02)
 
 | Phase | Status |
 |---|---|
@@ -426,10 +449,15 @@ Two filters side-by-side, **quantitative only** (no twin AI narratives in v1). B
 | 3 — Assessment lifecycle (create + edit + cohort code + manual close) | ✅ Complete |
 | 4 — Respondent flow (code → welcome → demographics → 30 questions → done) | ✅ Complete |
 | 5 — Closure cron | ✅ Complete |
-| 6 — Live numerical report | ⏳ Next |
-| 7 — AI integration | ⏳ |
+| 6 — Live numerical report (results page · filter modal · comparison view) | ✅ Complete |
+| 7 — AI integration | ⏳ Next |
 | 8 — PDF export | ⏳ |
 | 9 — Edit + audit | ⏳ |
 | 10 — Admin management | ⏳ |
 | 11 — Polish | ⏳ |
 | 12 — Handoff | ⏳ |
+
+### Phase 6 deviations from spec to remember in later phases
+- **Names shown directly** in the Individual Responses section (no letter labels, no reveal toggle). Per-user direction; defers spec 05 § 6 / spec 11 § 3 anonymization to a later phase. **The AI prompt builder in Phase 7 must strip names before any LLM call** — see spec 11 § 5 and the comment on `RespondentRow.name` in `src/lib/results-service.ts`.
+- **No PDF export of comparison view in v1** (spec 06 § 6.3). Phase 8 should not try to add it without a spec change.
+- **No AI-adapted action items in comparison view** (spec § 6.3). Phase 7 only generates AI for single-filter views.
