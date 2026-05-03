@@ -1,22 +1,16 @@
-// /admin/assessments/[id]/results — slice 6.2 + 7.3 (AI section).
+// /admin/assessments/[id]/results — slice 6.2.
 //
-// Server component. Reads filter from URL query string, renders the
-// banner stack + four numerical sections + (slice 7.3) the AI Insights
-// section above the Summary hero with cached executive summary +
-// Generate / Regenerate button. Focus Areas inherits AI-adapted action
-// items when the cache row exists for the active filter.
+// Server component. Reads filter from URL query string (always
+// "company-wide" in 6.2 since the filter UI ships in 6.3) and renders
+// the four-section numerical report with the banner stack at the top.
 
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import type { AiReportOutput } from '@/data/types'
-import { readCachedReport } from '@/lib/ai'
 import { requireAdmin } from '@/lib/admin-guard'
-import { filterToQueryString, parseFilterFromSearchParams } from '@/lib/filters'
-import { prisma } from '@/lib/prisma'
+import { parseFilterFromSearchParams } from '@/lib/filters'
 import { loadResults } from '@/lib/results-service'
 
-import { AiSection, type CachedReport } from './ai-section'
 import { PreliminaryBanner } from './banners'
 import { FilterControls } from './filter-controls'
 import { LockCard } from './lock-card'
@@ -50,35 +44,6 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
   if (!bundle) notFound()
 
   const { assessment, counts, lock, aggregates, respondents } = bundle
-
-  // Pre-fetch the cached AI report row for this filter so the AI section
-  // and the focus-areas section render in the same server pass — no
-  // client round-trip on initial load. Skipped when locked or empty.
-  let cachedReport: CachedReport | null = null
-  if (!lock && aggregates) {
-    const row = await readCachedReport(id, bundle.filter.signature)
-    if (row) {
-      const generatedBy = await prisma.admin.findUnique({
-        where: { id: row.generatedById },
-        select: { name: true },
-      })
-      cachedReport = {
-        outputJson: row.outputJson as unknown as AiReportOutput,
-        isDraft: row.isDraft,
-        generatedAt: row.generatedAt.toISOString(),
-        provider: row.provider,
-        promptVersion: row.promptVersion,
-        filterSignature: row.filterSignature,
-        generatedBy,
-      }
-    }
-  }
-
-  // Filter query string (canonical, sorted) — same form as filterSignature
-  // but URL-safe ("" for company-wide so we don't carry a stray `?`).
-  const filterQueryString = filterToQueryString(filter)
-  const belowAnonymityFloor = Boolean(lock)
-  const noFocusAreas = Boolean(aggregates && aggregates.focusAreas.length === 0)
 
   return (
     <div className="space-y-6">
@@ -133,19 +98,9 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
         <LockCard assessmentId={assessment.id} lock={lock} />
       ) : aggregates ? (
         <div className="space-y-8">
-          <AiSection
-            assessmentId={assessment.id}
-            filterQueryString={filterQueryString}
-            cached={cachedReport}
-            belowAnonymityFloor={belowAnonymityFloor}
-            noFocusAreas={noFocusAreas}
-          />
           <SummarySection aggregates={aggregates} />
           <CapabilityProfileSection aggregates={aggregates} />
-          <FocusAreasSection
-            aggregates={aggregates}
-            aiAdaptedActions={cachedReport?.outputJson.focusAreaActions}
-          />
+          <FocusAreasSection aggregates={aggregates} />
           <IndividualResponsesSection respondents={respondents} />
         </div>
       ) : null}

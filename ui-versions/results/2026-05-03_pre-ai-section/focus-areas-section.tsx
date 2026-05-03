@@ -1,8 +1,6 @@
 // Section 3 — Focus Areas. Top-5 weakest capabilities with two baseline
-// action items each (always rendered) plus, when an AI report is cached
-// for the active filter, two AI-adapted items stacked underneath. Per
-// the Phase-7 alignment 2026-05-03 (Q2/B): both versions visible, since
-// the user wants to compare variance until AI quality is trusted.
+// action items each. Spec 05 § 5, spec 04 § 3 (action items). AI-adapted
+// items land in Phase 7; this slice always renders the baseline.
 
 import {
   BASELINE_ACTION_ITEMS,
@@ -10,20 +8,14 @@ import {
   CAPABILITY_TO_PILLAR,
   PILLAR_LABELS,
 } from '@/data/constants'
-import type { AggregatedResults, AiReportOutput, CapabilityKey } from '@/data/types'
+import type { AggregatedResults } from '@/data/types'
 import { BAND_HEX, BAND_LABEL } from './band-style'
 
 interface FocusAreasSectionProps {
   aggregates: AggregatedResults
-  /**
-   * Optional. When present, the focus-area cards render an extra
-   * "AI-adapted action items" block below the baseline. Maps each
-   * focus-area capability to its two AI-written items.
-   */
-  aiAdaptedActions?: AiReportOutput['focusAreaActions']
 }
 
-export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSectionProps) {
+export function FocusAreasSection({ aggregates }: FocusAreasSectionProps) {
   const { focusAreas, capabilities } = aggregates
 
   if (focusAreas.length === 0) {
@@ -39,10 +31,6 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
     )
   }
 
-  const aiByCapability = new Map<CapabilityKey, string[]>(
-    (aiAdaptedActions ?? []).map((a) => [a.capability, a.actions]),
-  )
-
   return (
     <section>
       <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[3px] text-brand-grey-text">
@@ -52,8 +40,7 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
         {focusAreas.map((cap, i) => {
           const result = capabilities[cap]
           const pillar = CAPABILITY_TO_PILLAR[cap]
-          const [baselineA, baselineB] = BASELINE_ACTION_ITEMS[cap]
-          const aiActions = aiByCapability.get(cap)
+          const [actionA, actionB] = BASELINE_ACTION_ITEMS[cap]
           return (
             <article
               key={cap}
@@ -94,20 +81,10 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
                       Team is split — range {result.min.toFixed(1)} to {result.max.toFixed(1)}
                     </p>
                   ) : null}
-
-                  <div className="mt-4 space-y-4">
-                    <ActionList
-                      eyebrow="Baseline action items"
-                      items={[baselineA, baselineB]}
-                    />
-                    {aiActions && aiActions.length > 0 ? (
-                      <ActionList
-                        eyebrow="AI-adapted action items"
-                        items={aiActions}
-                        variant="ai"
-                      />
-                    ) : null}
-                  </div>
+                  <ol className="mt-4 space-y-2 text-sm text-brand-dark-blue">
+                    <ActionItem index={1} text={actionA} />
+                    <ActionItem index={2} text={actionB} />
+                  </ol>
                 </div>
               </div>
             </article>
@@ -118,34 +95,13 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
   )
 }
 
-function ActionList({
-  eyebrow,
-  items,
-  variant = 'baseline',
-}: {
-  eyebrow: string
-  items: string[]
-  variant?: 'baseline' | 'ai'
-}) {
-  const eyebrowColor = variant === 'ai' ? 'text-brand-ochre' : 'text-brand-grey-text'
-  const bulletBg = variant === 'ai' ? 'bg-brand-ochre/15' : 'bg-brand-grey-soft-bg'
+function ActionItem({ index, text }: { index: number; text: string }) {
   return (
-    <div>
-      <p className={`mb-2 text-[10px] font-bold uppercase tracking-[2px] ${eyebrowColor}`}>
-        {eyebrow}
-      </p>
-      <ol className="space-y-2 text-sm text-brand-dark-blue">
-        {items.map((text, i) => (
-          <li key={i} className="flex gap-2.5">
-            <span
-              className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-brand-dark-blue ${bulletBg}`}
-            >
-              {i + 1}
-            </span>
-            <span className="leading-relaxed">{text}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
+    <li className="flex gap-2.5">
+      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-grey-soft-bg text-[11px] font-semibold text-brand-dark-blue">
+        {index}
+      </span>
+      <span className="leading-relaxed">{text}</span>
+    </li>
   )
 }
