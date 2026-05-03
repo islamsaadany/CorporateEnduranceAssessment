@@ -63,7 +63,7 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
         select: { name: true },
       })
       cachedReport = {
-        outputJson: row.outputJson as unknown as AiReportOutput,
+        outputJson: normalizeOutputJson(row.outputJson as unknown as AiReportOutput),
         isDraft: row.isDraft,
         generatedAt: row.generatedAt.toISOString(),
         provider: row.provider,
@@ -151,4 +151,22 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
       ) : null}
     </div>
   )
+}
+
+/**
+ * Backward-compat shim: prompt v1 cached `executiveSummary` as a single
+ * paragraph string. Prompt v2 (2026-05-03) made it a string[] of bullets.
+ * Wrap legacy rows so `<SummaryBullets>` renders without crashing; the
+ * AI section already shows a "regenerate for the latest framing" note
+ * for older promptVersion rows.
+ */
+function normalizeOutputJson(raw: AiReportOutput): AiReportOutput {
+  const summary = raw.executiveSummary as unknown
+  if (typeof summary === 'string') {
+    return { ...raw, executiveSummary: [summary] }
+  }
+  if (Array.isArray(summary)) {
+    return { ...raw, executiveSummary: summary as string[] }
+  }
+  return { ...raw, executiveSummary: [] }
 }
