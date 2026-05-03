@@ -3,29 +3,32 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 5 complete · ready to merge to `main` · **Phase 6 (live numerical report) is next**
-**Last updated:** 2026-04-29
+**Current phase:** Phase 6 complete · ready to merge to `main` · **Phase 7 (AI integration) is next**
+**Last updated:** 2026-05-02
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
 ---
 
 ## 1. Current status
 
-**Phases 0–5 complete and pushed.** The branch is being merged to `main`.
+**Phases 0–6 complete and pushed.** The branch is being merged to `main`.
 
 What's built and live on Vercel:
 - **Documentation foundation** — `Plan & Progress/`, `product-spec/` (16 files), `CLAUDE.md`, `PROJECT_DETAILS.md`, `REUSABLE_PATTERNS.md`, `ENDURANCE_ASSESSMENT_SPEC.md` (slim index).
 - **App scaffold** — Next.js 16 (App Router) + React 19 + TypeScript 5.9 + Tailwind 3 + Prisma 5 on Neon Postgres + NextAuth v5. Landing page + admin chrome.
 - **Admin auth + dashboard** — Email/password login, JWT session augmented with role, `proxy.ts` (Next 16's renamed middleware) gating `/admin/*`, role-aware nav, sign-out form action, dashboard listing collecting + closed assessments.
-- **Assessment lifecycle (admin)** — Create form (clientName, deadline, dynamic departments, maxUses), detail page with cohort-code card + capacity strip + respondent table (filtered to demographics-completed, status pill Started/Submitted, Date column), edit page (clientName, deadline, departments add/remove with in-use protection, maxUses with floor), manual "Close now" with confirm.
-- **Respondent flow** — `/take` code entry → `/take/welcome` privacy disclosure → `/take/demographics` (name + dept + level + tenure required) → `/take/question/[1..30]` (Typeform-style, 1–4 + "I don't know" tiles, keyboard 1–4/0, Q30 auto-submits with explicit Submitting state, Back navigation between) → `/take/done`. localStorage resumes the in-flight session per browser.
-- **Closure cron + manual close** — `/api/cron/closure` (Bearer-auth, **daily at 00:00 UTC** per `vercel.json` — Vercel Hobby plan only allows daily crons) flips collecting assessments past their deadline → closed, audited as `trigger:'cron'`. Manual close routes through `/api/assessments/[id]/close` with `trigger:'manual'`. All four respondent routes 410 on closed. Trade-off: there's now up to a 24h window where a past-deadline assessment still shows status='collecting' and accepts submissions; the manual close button covers any case where this matters.
+- **Assessment lifecycle (admin)** — Create form, detail page with cohort-code card + capacity strip + respondent table, edit page, manual "Close now" with confirm. Detail page now also has **View report** + **Compare segments** entry points.
+- **Respondent flow** — `/take` code entry → `/take/welcome` → `/take/demographics` → `/take/question/[1..30]` → `/take/done`. localStorage resumes the in-flight session per browser.
+- **Closure cron + manual close** — `/api/cron/closure` (Bearer-auth, **daily at 00:00 UTC** per Vercel Hobby) flips collecting assessments past their deadline → closed, audited as `trigger:'cron'`.
+- **Live numerical report (Phase 6)** — `/admin/assessments/[id]/results` renders the four-section report (Summary hero with overall score + pillar breakdown + band legend, 3-column Capability Profile with spread / "Team is split" badges / Insufficient-data handling, Top-5 Focus Areas with baseline action items, Individual Responses table + capability heatmap). The pure scoring engine in `src/lib/scoring.ts` and the canonical filter signature in `src/lib/filters.ts` are shared with the JSON API at `/api/assessments/[id]/results` and with the comparison view, so the report page, the API, the (future) AI generation endpoint, and the (future) PDF export will never disagree on what "the numbers" are.
+- **Filter UI (slice 6.3)** — `/admin/assessments/[id]/results` page header has a `Filter:` chip row + "Change filter" button. The modal has multi-select chips for Department / Level / Tenure with a live preview ("matches N respondents (anonymity floor met ✓)") that turns red below 3. URL is the source of truth (`?dept=Sales,Engineering&level=manager&tenure=y4_7`), so views are shareable and refresh-safe.
+- **Comparison view (slice 6.4)** — `/admin/assessments/[id]/results/compare` shows two filters side-by-side (`?aDept=…&bDept=…`). Twin filter pickers reuse the same modal scoped per side. Hero / Pillar / Capability / Focus Areas sections render twin layouts; focus areas show "Only in A" / "Only in B" badges where the top-5 lists diverge. Quantitative only (no AI narrative comparison, no per-respondent table, no PDF export — spec 06 § 6.3).
 
-**DB workflow:** the user has access only to the Neon SQL editor (no local terminal). Hand-runnable SQL files live in `prisma/sql/` and are kept in sync by the Claude session whenever the schema or seed changes. The user has applied `000` + `001` (initial), `002` (cohort codes), `003` (Likert), `004` (levels + demographicsCompletedAt). 5 SQL files are tracked in `prisma/sql/` for future fresh installs and reproducibility.
+**DB workflow:** the user has access only to the Neon SQL editor (no local terminal — see `CLAUDE.md` § 1d). Hand-runnable SQL files live in `prisma/sql/` and are kept in sync by the Claude session. Files applied: `000`–`004` plus `005_reset_super_admin_password.sql` (bcrypt-via-pgcrypto template, reusable for any admin password reset) and `006_acme_sample_data.sql` (50 submitted respondents × 8 departments seeded into Acme Corp (sample) so the report page exercises across realistic data variety).
 
-**Branch:** `claude/continue-claude-docs-NyBFb`. Ready to merge to `main`. New session should branch from main.
+**Branch:** `claude/continue-session-ZFhaK`. Ready to merge to `main`. New session should branch from main.
 
-**Next session starts at Phase 6** — the live numerical report (`/admin/assessments/[id]/results`): aggregated pillar/capability scores, focus areas, anonymized respondent table, "Preliminary — N of M responded" banner during collection, ≥3 anonymity guardrail, filter UI (department/level/tenure/compound), comparison view (two-filter side-by-side, quantitative only).
+**Next session starts at Phase 7** — AI integration: `Settings` model is already in the schema; super-admin-only `/admin/settings/ai` page with provider dropdown + AES-256-GCM encrypted API-key column + connection test; `src/lib/ai/{index,prompt,gemini,claude,openai,cache}.ts` with provider abstraction; `POST /api/assessments/[id]/report?<filter signature>` to generate + cache; "Generate AI report" button in the report header (with watermarked draft pre-closure per spec 14). **Names must be stripped before any LLM call** (spec 11 § 5).
 
 ---
 
@@ -209,17 +212,25 @@ If you're a Claude Code session picking this up:
 7. **Update this file** as you work — mark completed checkboxes, log changes in section 3, surface blockers in section 4.
 8. **Never silently change a decision** captured in `execution-plan.md`. If something needs to change, raise it with the user first. Multiple reversals already happened in this session — appending a new decisions-log row noting the reversal is mandatory.
 
-### What's next (Phase 6 — Live numerical report)
+### What's next (Phase 7 — AI integration)
 
-The build sequence in `execution-plan.md` lists Phase 6 as `/admin/assessments/[id]/results` with all 4 sections + ≥3 guardrail + filter UI + comparison view. New files needed (none of which exist yet):
+The build sequence in `execution-plan.md` lists Phase 7 as the AI-generated narrative + cache. None of the AI files exist yet; the `Settings` and `GeneratedReport` Prisma models are already in the schema. New files needed:
 
-- `src/lib/scoring.ts` — pure aggregation (NULL-safe means; per-capability ≥3 floor)
-- `src/lib/filters.ts` — `parseFilter`, `filterSignature`, `applyFilter`, `meetsAnonymityGuardrail`
-- `src/app/admin/assessments/[id]/results/page.tsx` — the results page itself
-- `src/app/api/assessments/[id]/results/route.ts` — server endpoint returning aggregates JSON
-- Plus filter/comparison UI components
+- `src/lib/crypto.ts` — AES-256-GCM `encrypt(plaintext)` / `decrypt(buf)`; master key from `SETTINGS_ENCRYPTION_KEY`
+- `src/lib/ai/index.ts` — provider abstraction (`selectProvider(settings): AiProvider` with `generateReport()` + `testConnection()`)
+- `src/lib/ai/prompt.ts` — provider-neutral system + user prompt builder per `product-spec/14_ai_prompts.md`
+- `src/lib/ai/{gemini,claude,openai}.ts` — per-provider SDK adapters
+- `src/lib/ai/cache.ts` — read/write `GeneratedReport` keyed by `(assessmentId, filterSignature)` (the same signature already used by Phase 6's filter URL)
+- `src/app/api/settings/ai/route.ts` — GET/PATCH for provider + encrypted API key
+- `src/app/api/settings/ai/test/route.ts` — round-trip test prompt
+- `src/app/api/assessments/[id]/report/route.ts` — POST generate / GET fetch with watermarked-draft handling
+- `src/app/admin/settings/ai/page.tsx` — super-admin only
+- "Generate AI report" button on the report page header
 
-The 30 questions are already in `src/data/questions.ts`. Sample data (5 respondents, 3 submitted, 12 NULL "I don't know" answers sprinkled in) is already in the DB.
+**Critical Phase 7 checks:**
+- **Names must be stripped from the LLM input** — see spec 11 § 5 and the comment on `RespondentRow.name` in `src/lib/results-service.ts`. The current API surface returns names; the AI prompt builder is responsible for stripping them.
+- **Cache key alignment** — `filterSignature(filter)` from `src/lib/filters.ts` is already the agreed key. Don't invent a new signature scheme; reuse the function.
+- **Bump `Settings.promptVersion`** when changing the prompt builder. Cached reports older than the new version should be treated as cache misses (do not silently invalidate without the user's say-so per `CLAUDE.md` "After Making Changes to AI Prompts").
 
 ---
 

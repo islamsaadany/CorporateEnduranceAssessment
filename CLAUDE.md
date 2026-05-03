@@ -437,9 +437,9 @@ Two filters side-by-side, **quantitative only** (no twin AI narratives in v1). B
 
 ---
 
-*Last Updated: 2026-04-30 (Phase 6 alignment — drift fixes)*
+*Last Updated: 2026-05-02 (Phase 6 complete)*
 
-### Built so far (as of 2026-04-29)
+### Built so far (as of 2026-05-02)
 
 | Phase | Status |
 |---|---|
@@ -449,10 +449,15 @@ Two filters side-by-side, **quantitative only** (no twin AI narratives in v1). B
 | 3 — Assessment lifecycle (create + edit + cohort code + manual close) | ✅ Complete |
 | 4 — Respondent flow (code → welcome → demographics → 30 questions → done) | ✅ Complete |
 | 5 — Closure cron | ✅ Complete |
-| 6 — Live numerical report | ⏳ Next |
-| 7 — AI integration | ⏳ |
+| 6 — Live numerical report (results page · filter modal · comparison view) | ✅ Complete |
+| 7 — AI integration | ⏳ Next |
 | 8 — PDF export | ⏳ |
 | 9 — Edit + audit | ⏳ |
 | 10 — Admin management | ⏳ |
 | 11 — Polish | ⏳ |
 | 12 — Handoff | ⏳ |
+
+### Phase 6 deviations from spec to remember in later phases
+- **Names shown directly** in the Individual Responses section (no letter labels, no reveal toggle). Per-user direction; defers spec 05 § 6 / spec 11 § 3 anonymization to a later phase. **The AI prompt builder in Phase 7 must strip names before any LLM call** — see spec 11 § 5 and the comment on `RespondentRow.name` in `src/lib/results-service.ts`.
+- **No PDF export of comparison view in v1** (spec 06 § 6.3). Phase 8 should not try to add it without a spec change.
+- **No AI-adapted action items in comparison view** (spec § 6.3). Phase 7 only generates AI for single-filter views.

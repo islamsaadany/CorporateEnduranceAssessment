@@ -54,9 +54,12 @@ CorporateEnduranceAssessment/
 │       ├── 001_seed_sample_data.sql # Auto-generated from seed.ts via gen-seed-sql.mjs
 │       ├── 002_cohort_codes.sql     # Migration: per-respondent → cohort codes
 │       ├── 003_likert_scale.sql     # Migration: 1–5 Likert → 1–4 + "I don't know"
-│       └── 004_levels_and_demographics.sql  # Migration: 4-tier Level + demographicsCompletedAt
+│       ├── 004_levels_and_demographics.sql  # Migration: 4-tier Level + demographicsCompletedAt
+│       ├── 005_reset_super_admin_password.sql  # Reusable bcrypt password reset (pgcrypto)
+│       └── 006_acme_sample_data.sql # 50 submitted respondents × 8 departments for the Acme Corp (sample) assessment
 ├── scripts/
-│   └── gen-seed-sql.mjs             # Emits 001_seed_sample_data.sql from seed.ts logic
+│   ├── gen-seed-sql.mjs             # Emits 001_seed_sample_data.sql from seed.ts logic
+│   └── gen-acme-sample-data.ts      # Emits 006_acme_sample_data.sql with deterministic personas
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                 # Landing — CTAs to /take and /admin/login
@@ -88,20 +91,39 @@ CorporateEnduranceAssessment/
 │   │   │       │   ├── page.tsx
 │   │   │       │   └── new-assessment-form.tsx
 │   │   │       └── [id]/
-│   │   │           ├── page.tsx           # Detail: cohort code card + capacity strip + table
+│   │   │           ├── page.tsx           # Detail: cohort code card + capacity strip + table; "View report" link
 │   │   │           ├── copy-button.tsx
 │   │   │           ├── close-button.tsx   # "Close now" with confirm
-│   │   │           └── edit/
-│   │   │               ├── page.tsx
-│   │   │               └── edit-assessment-form.tsx
-│   │   │   # Phase 6+: results/, activity/, settings/ai/, admins/
+│   │   │           ├── edit/
+│   │   │           │   ├── page.tsx
+│   │   │           │   └── edit-assessment-form.tsx
+│   │   │           └── results/                          # Phase 6
+│   │   │               ├── page.tsx                          # Single-filter report
+│   │   │               ├── band-style.ts                     # BandKey → Tailwind class + hex helpers
+│   │   │               ├── banners.tsx                       # PreliminaryBanner
+│   │   │               ├── lock-card.tsx                     # <3 respondents lock states
+│   │   │               ├── summary-section.tsx               # Hero panel (overall + 3 pillars + legend)
+│   │   │               ├── capability-profile-section.tsx    # 3 columns × 5 rows; spread/range; "Team is split" badge
+│   │   │               ├── focus-areas-section.tsx           # Top-5 weakest with baseline action items
+│   │   │               ├── individual-responses-section.tsx  # Table + heatmap (names shown directly in v1)
+│   │   │               ├── filter-modal.tsx                  # Multi-select chips + live preview (slice 6.3)
+│   │   │               ├── filter-controls.tsx               # Active-chip row + Change-filter button
+│   │   │               └── compare/                          # Comparison view (slice 6.4)
+│   │   │                   ├── page.tsx                          # Twin filters via aDept/bDept etc.
+│   │   │                   ├── comparison-filter-controls.tsx    # Twin pickers reusing FilterModal
+│   │   │                   ├── comparison-summary-section.tsx    # Twin hero + delta strip
+│   │   │                   ├── comparison-pillar-section.tsx     # Twin progress bars per pillar
+│   │   │                   ├── comparison-capability-section.tsx # Twin bars per capability
+│   │   │                   └── comparison-focus-areas-section.tsx # Twin top-5 with "Only in A/B" badges
+│   │   │   # Phase 7+: activity/, settings/ai/, admins/
 │   │   └── api/
 │   │       ├── auth/[...nextauth]/route.ts
 │   │       ├── assessments/
 │   │       │   ├── route.ts                  # POST create
 │   │       │   └── [id]/
 │   │       │       ├── route.ts              # PATCH edit
-│   │       │       └── close/route.ts        # POST manual close
+│   │       │       ├── close/route.ts        # POST manual close
+│   │       │       └── results/route.ts      # GET aggregated results JSON (Phase 6 slice 6.1)
 │   │       ├── respondents/
 │   │       │   ├── validate/route.ts         # POST validate cohort code, create/resume Respondent
 │   │       │   └── [id]/
@@ -116,11 +138,14 @@ CorporateEnduranceAssessment/
 │   │   ├── admin-guard.ts           # requireAdmin() / requireSuperAdmin() server helpers
 │   │   ├── codes.ts                 # generateUniqueAssessmentCode() — single cohort code per assessment
 │   │   ├── audit.ts                 # logAdminAction() / logRespondentLifecycle()
-│   │   └── take-storage.ts          # SSR-safe localStorage helpers for /take
+│   │   ├── take-storage.ts          # SSR-safe localStorage helpers for /take
+│   │   ├── filters.ts               # ParsedFilter parse/encode + filter signature + Prisma where (Phase 6)
+│   │   ├── scoring.ts               # Pure aggregation: per-respondent → team scores + focus areas (Phase 6)
+│   │   └── results-service.ts       # loadResults(): single source for the report page + API route (Phase 6)
 │   ├── proxy.ts                     # Next 16's renamed middleware — gates /admin/*
 │   └── data/
-│       ├── types.ts                 # PillarKey, CapabilityKey, ParsedFilter, AggregatedResults, AiReportOutput, AnswerValue
-│       ├── constants.ts             # Pillar/capability metadata, LEVELS (4), TENURE_BANDS (5), BAND_THRESHOLDS (quartiles), LIKERT_VALUES, MIN_RESPONDENTS_FOR_VIEW
+│       ├── types.ts                 # PillarKey, CapabilityKey, ParsedFilter (multi-value), CapabilityResult/PillarResult/AggregatedResults, AiReportOutput, AnswerValue
+│       ├── constants.ts             # Pillar/capability metadata, LEVELS (4), TENURE_BANDS (5), BAND_THRESHOLDS (quartiles), LIKERT_VALUES, MIN_RESPONDENTS_FOR_VIEW, BAND_INTERPRETATION, BASELINE_ACTION_ITEMS, PILLAR_VERB_PAIRS
 │       └── questions.ts             # 30 verbatim statements + helpers (questionAtPosition, QUESTIONS_BY_ID)
 ├── public/                          # (.gitkeep — placeholder for Vercel/Next)
 ├── vercel.json                      # framework: nextjs + crons schedule
@@ -337,7 +362,7 @@ All admin routes are gated by NextAuth session via `src/proxy.ts`. Respondent ro
 | ✅ | `POST` | `/api/assessments` | Create. Body: `{ clientName, deadline, departments[], maxUses }`. Generates ONE cohort code via `generateUniqueAssessmentCode()`. No bulk respondent rows. Audit-logs `assessment.create` (without the code in metadata — the code is a credential). |
 | ✅ | `PATCH` | `/api/assessments/[id]` | Edit `clientName / deadline / departments / maxUses`. Body: `{ clientName, deadline, departments: { keep: [], add: [] }, maxUses }`. Returns 409 `department_in_use` if removal targets a department that any respondent has chosen. `maxUses` cannot drop below the demographics-completed count. |
 | ✅ | `POST` | `/api/assessments/[id]/close` | Manual "Close now" — same DB effect as the cron, but `metadata.trigger = 'manual'` and `actorAdminId` set. 409 `already_closed` if status is already `closed`. |
-| ⏳ Phase 6 | `GET` | `/api/assessments/[id]/results?filter=…` | Aggregated numerical results for the active filter. Honors ≥3 guardrail. |
+| ✅ | `GET` | `/api/assessments/[id]/results?dept=…&level=…&tenure=…` | Aggregated numerical results for the active filter. Submitted-only respondents. Returns `{ assessment, filter, counts, lock, aggregates, respondents, availableDepartments, allSubmittedDemos }`. Honors ≥3 guardrail. Underlying logic lives in `src/lib/results-service.ts` and is shared with the page. |
 | ⏳ Phase 7 | `POST` / `GET` | `/api/assessments/[id]/report?filter=…` | Generate / fetch AI report. Watermarked draft if pre-closure. Caches into `GeneratedReport`. |
 | ⏳ Phase 8 | `POST` | `/api/assessments/[id]/report/pdf?filter=…` | React-PDF render of the filtered view. |
 | ⏳ Phase 9 | `GET` | `/api/assessments/[id]/activity` | Audit log entries scoped to this assessment. |
@@ -362,42 +387,17 @@ All admin routes are gated by NextAuth session via `src/proxy.ts`. Respondent ro
 |---|--------|------|---------|
 | ⏳ Phase 7 | `GET` / `PATCH` | `/api/settings/ai` | Provider + AES-256 encrypted API key. |
 | ⏳ Phase 7 | `POST` | `/api/settings/ai/test` | Round-trip test prompt. |
+| ⏳ Phase 7 | `POST` / `GET` | `/api/assessments/[id]/report?<filter signature>` | Generate / fetch AI report. Watermarked draft pre-closure. Caches into `GeneratedReport` keyed by `(assessmentId, filterSignature)`. |
+| ⏳ Phase 8 | `POST` | `/api/assessments/[id]/report/pdf?<filter signature>` | React-PDF render of the filtered view. |
+| ⏳ Phase 9 | `GET` | `/api/assessments/[id]/activity` | Audit log entries scoped to this assessment. |
 | ⏳ Phase 9 | `PATCH` | `/api/respondents/[id]/answers` | Admin post-closure edit; triggers cache invalidation. |
 | ⏳ Phase 10 | `GET` / `POST` / `PATCH` | `/api/admins` | List / create / deactivate admins. |
-| `PATCH` | `/api/respondents/[id]/responses` | Upsert one or more answers. Only when `submittedAt IS NULL` and assessment is `collecting`. |
-| `POST` | `/api/respondents/[id]/submit` | Finalize: sets `submittedAt`, logs `respondent.submit`. Subsequent calls return 410. |
-
-### Auth + Cron
-| Method | Path | Purpose |
-|--------|------|---------|
-| All | `/api/auth/[...nextauth]` | NextAuth credentials provider handler. |
-| `POST` | `/api/cron/closure` | Hourly cron. Flips `collecting → closed` on assessments past deadline. Requires `CRON_SECRET` header. |
 
 ---
 
 ## Server-side Modules
 
 The product/content rules these modules implement live in `product-spec/`. The summaries below are about the **code shape**, not the rules.
-
-### `src/lib/scoring.ts`
-Pure functions, no DB access. Inputs are typed arrays of `{ respondentId, questionId, value }` plus the active filter; outputs are aggregates the API route serializes to JSON.
-
-```ts
-export function aggregateForFilter(
-  responses: Response[],
-  respondents: Respondent[],
-  filter: ParsedFilter
-): {
-  sampleSize: number
-  overall: number
-  pillars:    Record<PillarKey, number>
-  capabilities: Record<CapabilityKey, { score: number; spread: number }>
-  focusAreas: CapabilityKey[]   // top-5 weakest, see product-spec/03 for tie-break rule
-  band:       Record<string, BandKey>
-}
-```
-
-**Rule reference:** see `product-spec/03_scoring_and_bands.md` for the math, band thresholds, and tie-break rule. **Do not** re-document those rules here — change the spec and the implementation together.
 
 ### `src/lib/codes.ts` ✅
 ```ts
@@ -437,31 +437,43 @@ findInFlightRespondentId(): string | null   // walks localStorage, returns first
 clearAllRespondentIds()
 ```
 
-### `src/lib/scoring.ts` ⏳ Phase 6
-Pure functions, no DB access. Inputs are typed arrays of `{ respondentId, questionId, value }` plus the active filter; outputs are aggregates the API route serializes to JSON.
+### `src/lib/scoring.ts` ✅
+Pure functions, no DB access. The two-stage shape (per-respondent first, then team rollup) keeps "I don't know" handling honest: a respondent who picks IDK on both angles of a capability simply has no value for that capability and contributes nothing to that capability's team mean.
 ```ts
-export function aggregateForFilter(
-  responses: Response[],
-  respondents: Respondent[],
-  filter: ParsedFilter
-): {
-  sampleSize: number
-  overall: number
-  pillars:    Record<PillarKey, number>
-  capabilities: Record<CapabilityKey, { score: number; spread: number; ratedCount: number }>
-  focusAreas: CapabilityKey[]   // top-5 weakest, see product-spec/03 for tie-break rule
-  bands:      { overall: BandKey; pillars: …; capabilities: … }
-}
-```
-**NULL handling:** `Response.value === null` ("I don't know") is excluded from every mean. A capability needs ≥3 rated answers across the filter to display a score (else "Insufficient data" — per-capability anonymity floor).
+export function computeIndividualScores(
+  rows: ScoringInputRow[],     // { respondentId, questionId, value: 1..4 | null }
+  respondentIds: string[],     // include respondents with all-IDK so they count toward sampleSize
+): Map<string, IndividualScores>
 
-### `src/lib/filters.ts` ⏳ Phase 6
-```ts
-export function parseFilter(qs: URLSearchParams): ParsedFilter
-export function filterSignature(f: ParsedFilter): string  // canonical sorted string used as cache key
-export function applyFilter(respondents: Respondent[], f: ParsedFilter): Respondent[]
-export function meetsAnonymityGuardrail(filtered: Respondent[]): boolean  // length >= 3
+export function aggregateTeam(
+  individuals: Map<string, IndividualScores>,
+  sampleSize: number,
+): AggregatedResults
 ```
+- **NULL handling:** `value === null` ("I don't know") is excluded from every mean. A capability with <3 rated answers across the filter is marked `insufficient: true` (per-capability anonymity floor).
+- **Team overall:** mean of *individual overall scores* — not the mean of the 3 team-pillar scores. They diverge when "I don't know" is unevenly distributed across pillars; the per-individual form is the rigorous one (spec 03 § 3.3).
+- **Focus areas:** bottom 5 by score; tie-break spread descending, then alphabetical by display label. Insufficient capabilities are excluded from the ranking.
+- **CapabilityResult** carries `score / spread / min / max / ratedCount / insufficient / band` so the report UI doesn't need to derive any of them.
+
+### `src/lib/filters.ts` ✅
+```ts
+export function parseFilterFromSearchParams(sp: URLSearchParams, prefix?: string): ParsedFilter
+export function filterSignature(f: ParsedFilter): string         // unprefixed canonical form, "company_wide" for empty — used as cache key
+export function filterToQueryString(f: ParsedFilter, prefix?: string): string  // empty for company-wide; prefix='a' produces aDept/aLevel/aTenure for the comparison view
+export function filterDescription(f: ParsedFilter): string       // "Sales department, Manager level, 4–7y tenure"
+export function isCompanyWide(f: ParsedFilter): boolean
+export function prismaWhereForFilter(f: ParsedFilter): Prisma.RespondentWhereInput
+```
+- **`ParsedFilter` is multi-value** per dimension (`departments: string[]`, `levels: Level[]`, `tenures: TenureBand[]`); empty array on a dimension means "all" (spec 06 § 1).
+- **Filter signature** is the same canonical string used as the URL param, the cache key in `generated_reports`, and the PDF filename suffix. No SHA hashing — readability matters.
+- **Lenient parser:** invalid level/tenure values are silently dropped (spec 06 § 9). Department names pass through verbatim; unknown departments return 0 rows from the DB query.
+
+### `src/lib/results-service.ts` ✅
+The single source for "fetch + aggregate the report data." Called by both `GET /api/assessments/[id]/results` and the server-rendered results page so they can never disagree.
+```ts
+export async function loadResults(assessmentId: string, filter: ParsedFilter): Promise<ResultsBundle | null>
+```
+Returns `{ assessment, filter, counts, lock, aggregates, respondents, availableDepartments, allSubmittedDemos }`. Only respondents with `submittedAt IS NOT NULL` count toward aggregates and the floor. `availableDepartments` and `allSubmittedDemos` are present on every return path (including the lock-card path) so the filter modal can render chips and compute live preview counts even when the current filtered view is locked. Names are included on the `respondents` rows; the AI prompt builder in Phase 7 must strip them before any LLM call (spec 11 § 5).
 
 ### `src/lib/crypto.ts` ⏳ Phase 7
 AES-256-GCM. `encrypt(plaintext: string): Buffer` and `decrypt(buf: Buffer): string`. Master key from `SETTINGS_ENCRYPTION_KEY`. Used only for `Settings.encryptedApiKey*` columns.
