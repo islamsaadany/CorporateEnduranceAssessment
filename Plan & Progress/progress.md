@@ -3,8 +3,8 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 6 complete · ready to merge to `main` · **Phase 7 (AI integration) is next**
-**Last updated:** 2026-05-02
+**Current phase:** Phase 7.1 complete · slices 7.2–7.4 next
+**Last updated:** 2026-05-03
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
 ---
@@ -120,12 +120,33 @@ What's built and live on Vercel:
   - [x] Type-check + production build green; new route `/admin/assessments/[id]/results/compare` registered
 
 ### Phase 7 — AI integration
-- [ ] Settings table with AES-256 encrypted API keys
-- [ ] `/admin/settings/ai` page (super admin only)
-- [ ] Provider abstraction (`src/lib/ai/*`)
-- [ ] AI report endpoint with caching
-- [ ] "Generate report" button (draft vs. final)
-- [ ] Watermark on draft reports
+**Slicing:** 7.1 crypto + settings backbone → 7.2 provider abstraction + prompt builder → 7.3 report generation endpoint + UI button → 7.4 validation + retries + audit.
+
+- [x] **7.1** — Crypto + settings backbone
+  - [x] `src/lib/crypto.ts` — AES-256-GCM `encryptSecret()` / `decryptSecret()` / `lastFourOf()` over the `SETTINGS_ENCRYPTION_KEY` master (base64-decoded to 32 bytes); wire format `iv(12) || authTag(16) || ciphertext`
+  - [x] `GET /api/settings/ai` — super-admin-only; returns `{ provider, providers: {gemini|claude|openai: {hasKey, source: 'db'|'env'|'none', lastFour, envVarName}}, updatedAt, updatedBy }`. Lazily creates the Settings singleton row.
+  - [x] `PATCH /api/settings/ai` — super-admin-only; body `{ provider?, apiKeyProvider?, apiKey? }`. Encrypts the supplied key into the matching column. Audit-logs `ai.config_change` (no key value or tail in metadata).
+  - [x] `POST /api/settings/ai/test` — super-admin-only; body `{ provider, apiKey? }`. Resolves key in priority `supplied → db → env`. Hits each provider's list-models endpoint (Gemini `/v1beta/models?key=`, Anthropic `/v1/models` with `x-api-key` + `anthropic-version: 2023-06-01`, OpenAI `/v1/models` with Bearer) — auth-only validation, no token cost. 8s timeout. Humanised error messages for 401/403/429/5xx.
+  - [x] `/admin/settings/ai` page — super-admin-gated. Provider dropdown, masked API key input per selected provider, "Saved key ending in ••••XXXX" line with source pill (Saved / Env fallback / Not configured), bootstrap banner when active provider's key comes from env. Test connection + Save buttons. "Last updated by {name} on {date}" footer.
+  - [x] Layout nav: pre-existing super-admin "AI settings" link (added in Phase 2) now resolves; no layout change needed.
+  - [x] Type-check + production build green; new routes `/admin/settings/ai`, `/api/settings/ai`, `/api/settings/ai/test` registered.
+  - [x] **Slice 7.2 will refactor the inline provider HTTP calls into the abstraction at `src/lib/ai/`.**
+- [ ] **7.2** — Provider abstraction + prompt builder
+  - [ ] `src/lib/ai/index.ts` (`selectProvider`, `generateReport`, `testConnection`)
+  - [ ] `src/lib/ai/prompt.ts` — provider-neutral system + user prompt builder per spec 14; **strips names** before any LLM call (spec 11 § 5)
+  - [ ] `src/lib/ai/{gemini,claude,openai}.ts` per-provider SDK adapters
+  - [ ] `src/lib/ai/cache.ts` — read/write `GeneratedReport` keyed by `(assessmentId, filterSignature)`
+  - [ ] Refactor `/api/settings/ai/test` to use the abstraction
+- [ ] **7.3** — Report generation endpoint + UI button
+  - [ ] `POST /api/assessments/[id]/report?<filter>` — generate (draft if collecting, final if closed); writes to `GeneratedReport` cache
+  - [ ] `GET /api/assessments/[id]/report?<filter>` — fetch cached
+  - [ ] "Generate AI report" button on results-page header
+  - [ ] Executive summary panel + AI-adapted action items rendered into the existing Focus Areas section
+  - [ ] Draft watermark when `assessment.status === 'collecting'`
+- [ ] **7.4** — Validation + retries + audit
+  - [ ] Spec 14 § 4 validators (JSON shape, ≤120 words, exactly 5 keys × 2 items, no numerics regex, no first-person, no em dashes, no emoji)
+  - [ ] One retry on hard fails; baseline fallback if both attempts fail (not cached per spec 14 § 5)
+  - [ ] Audit entries: `ai.generate`, `ai_generation_failed`, `ai_fallback_used`
 
 ### Phase 8 — PDF export
 - [ ] React-PDF template
@@ -164,6 +185,7 @@ Most recent entries at the top. Limit to 15 entries; archive older entries to a 
 
 | Date | Phase | Change |
 |------|-------|--------|
+| 2026-05-03 | 7.1 | **Phase 7.1 landed (Crypto + settings backbone).** New `src/lib/crypto.ts` provides AES-256-GCM encrypt/decrypt + `lastFourOf` over the `SETTINGS_ENCRYPTION_KEY` master (base64 → 32 bytes; wire format `iv(12) ‖ authTag(16) ‖ ciphertext`). New super-admin-only routes: `GET /api/settings/ai` (returns provider + per-provider source/lastFour with env-fallback), `PATCH /api/settings/ai` (writes encrypted key into the matching column, audit-logs `ai.config_change` without any key tail in metadata), `POST /api/settings/ai/test` (resolves key in `supplied → db → env` priority, pings each provider's list-models endpoint — Gemini `/v1beta/models?key=`, Anthropic `/v1/models` with `x-api-key`+`anthropic-version`, OpenAI `/v1/models` with Bearer — 8s timeout, humanised 401/403/429/5xx messaging). New `/admin/settings/ai` page wires it up: provider dropdown, masked API key input scoped to the selected provider, source pill (Saved / Env fallback / Not configured), persistent bootstrap banner when the active provider is reading from env, "Last updated by …" footer. The pre-existing super-admin "AI settings" nav link (added in Phase 2) now resolves. Inline per-provider HTTP calls in `/api/settings/ai/test` are deliberately temporary — slice 7.2 will lift them into the `src/lib/ai/` abstraction. Type-check + production build green (28 routes; +/admin/settings/ai, +/api/settings/ai, +/api/settings/ai/test). |
 | 2026-04-29 | 5 | Phase 5 landed: `POST /api/cron/closure` (Bearer-auth via CRON_SECRET; finds collecting assessments past deadline; per-assessment $transaction sets status=closed + closedAt + writes assessment.close audit entry with metadata={trigger:'cron'}; idempotent; force-dynamic; GET=POST alias for manual curl testing). vercel.json adds `crons: [{path:'/api/cron/closure', schedule:'0 * * * *'}]`. Also `POST /api/assessments/[id]/close` for the manual close path (Bearer-not-needed, NextAuth session check; trigger:'manual'; 409 if already closed). New `CloseButton` client component on the admin detail page renders only while status='collecting' (with a confirm step before firing). Existing 410 guards in respondent routes (validate / demographics / responses / submit) already block post-closure activity. Build clean (23 routes; +/api/cron/closure, +/api/assessments/[id]/close). |
 | 2026-04-29 | 3 | **Cohort code reversal + edit page + form UX** (per user feedback): switched from per-respondent codes to one cohort code per assessment with `maxUses` hard cap. Schema: `Assessment.code` (unique) + `Assessment.maxUses` added; `Respondent.code` dropped. New `prisma/sql/002_cohort_codes.sql` migrates the live DB in place (idempotent). 000 + 001 SQL regenerated. `POST /api/assessments` now creates ONE assessment + ONE code, no bulk respondent rows. New `PATCH /api/assessments/[id]` for editing client name + deadline + departments + maxUses, with rules: department in use cannot be removed (409), maxUses cannot drop below current respondent count. New `/admin/assessments/[id]/edit` page wraps the rules in UI (in-use departments shown locked). Detail page now shows the single cohort code with copy + capacity strip (Started / In progress / Submitted / Remaining). Form Enter-key fix: pressing Enter inside a department row appends a new row + focuses it (does nothing if current row is empty), and never submits the form. Decisions log gets a 2026-04-29 reversal entry. Build clean (10 routes). |
 | 2026-04-29 | 3 | Phase 3 landed: `src/lib/codes.ts` (6-char generator over 31-char alphabet excluding 0/O/1/I/L, batch collision-checked against the unique `Respondent.code` index, retries up to 5 times); `src/lib/audit.ts` (`logAdminAction` + `logRespondentLifecycle` with typed action enums and JSON-safe metadata); `POST /api/assessments` (Zod validation, future-deadline check, dept dedup, transactional create wired to `assessment.create` audit log); `/admin/assessments/new` server page + `NewAssessmentForm` client (client name, future deadline, dynamic department list, respondent count 3–100); `/admin/assessments/[id]` detail page (status pill, totals strip not-started/in-progress/submitted, departments chips, respondent table with code + name + dept + level + tenure + status, per-row + bulk "Copy all codes" client buttons). Build clean (8 routes). |
