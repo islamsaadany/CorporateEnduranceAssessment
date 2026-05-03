@@ -5,15 +5,7 @@ import { prisma } from '@/lib/prisma'
 export const metadata = { title: 'Dashboard — The Endurance Assessment' }
 
 export default async function DashboardPage() {
-  const user = await requireAdmin()
-
-  // Surface the env-var-credentials trade-off whenever it's active so a
-  // super admin always knows their password is readable in the Vercel
-  // dashboard. See src/lib/auth.ts for the matching login path.
-  const envCredsActive =
-    user.role === 'super_admin' &&
-    Boolean(process.env.ADMIN_USERNAME) &&
-    Boolean(process.env.ADMIN_PASSWORD)
+  await requireAdmin()
 
   const [collecting, closed] = await Promise.all([
     prisma.assessment.findMany({
@@ -42,18 +34,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-10">
-      {envCredsActive ? (
-        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-medium">Super admin password is set via environment variables.</p>
-          <p className="mt-1 text-amber-800">
-            Anyone with edit access to this project&rsquo;s Vercel environment variables can read
-            this password in plaintext. To revert to a database-backed password, remove{' '}
-            <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">ADMIN_PASSWORD</code> from
-            Vercel and redeploy.
-          </p>
-        </div>
-      ) : null}
-
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Assessments</h1>
