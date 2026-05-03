@@ -104,10 +104,15 @@ function FallbackCard({
       <p className="text-[11px] font-bold uppercase tracking-[2px] text-amber-900">
         AI assistance unavailable — showing baseline content
       </p>
-      <p className="mt-2 font-serif text-sm leading-relaxed text-brand-dark-blue">
-        {fallback.outputJson.executiveSummary}
-      </p>
-      <p className="mt-2 text-[11px] italic text-amber-900">
+      <ul className="mt-2 space-y-1.5">
+        {fallback.outputJson.executiveSummary.map((b, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-700" />
+            <span className="font-serif text-sm leading-relaxed text-brand-dark-blue">{b}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[11px] italic text-amber-900">
         Generated from baseline content. The AI provider returned an unusable response after one
         retry. Baseline action items are also shown in the Focus Areas section below.
       </p>

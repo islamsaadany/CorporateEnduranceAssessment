@@ -1,13 +1,20 @@
 /**
- * Spec-14 prompt builder.
+ * Spec-14 prompt builder. Provider-neutral.
  *
- * Provider-neutral. Returns a `{ system, user }` pair the adapters in
- * gemini.ts / claude.ts / openai.ts feed into their respective JSON-mode
- * APIs. The exact wording mirrors product-spec/14_ai_prompts.md § 2 + § 3
- * and must be edited there (with a version bump) before being edited here.
+ * Prompt v2 (2026-05-03): executive summary is an ARRAY of 3–5 correlation
+ * bullets (not a paragraph), action items must cite at least one data
+ * signal (spread, demographic pattern, filter context, or capability
+ * tension), and the framing of baseline action items shifts from "use
+ * as starting point" to "FOR REFERENCE — your output must be substantively
+ * different, not paraphrases."
  *
- * Names are stripped via anonymizeRespondents() before any string formatting.
- * The output strings never contain names.
+ * The wording mirrors product-spec/14_ai_prompts.md § 2 + § 3 verbatim.
+ * If you change either side you MUST bump CURRENT_PROMPT_VERSION below
+ * AND mirror the change in the spec file with a changelog entry — see
+ * CLAUDE.md "After Making Changes to AI Prompts".
+ *
+ * Names are stripped via anonymizeRespondents() before any string
+ * formatting. Output strings never contain names.
  */
 
 import {
@@ -27,36 +34,58 @@ import { anonymizeRespondents, type AnonymizedRespondent } from './strip-names'
 import type { GenerateReportInput } from './types'
 
 /**
- * Mirrors product-spec/14_ai_prompts.md § 2. If you change this, bump
- * Settings.promptVersion and the spec file's version header in lockstep
- * — see CLAUDE.md "After Making Changes to AI Prompts".
+ * Bumped on every meaningful prompt change. Cached reports written under
+ * an older version still render but the UI shows a "Generated with prompt
+ * v{N}; current is v{M} — regenerate for the latest framing" note. We
+ * never silently invalidate per CLAUDE.md.
+ *
+ * v1: Initial paragraph-style executive summary (spec 14 v0.1).
+ * v2: Correlation bullets, signal-citation rule, anti-paraphrase framing
+ *     (spec 14 v0.2).
+ */
+export const CURRENT_PROMPT_VERSION = 2
+
+/**
+ * Mirrors product-spec/14_ai_prompts.md § 2.
  */
 const SYSTEM_PROMPT = `You are a senior consultant at Forefront Consulting writing a brief board-grade report for a client's leadership team. The client has just completed an Endurance Assessment that measures the organization across three pillars — Agility (sense and move), Toughness (absorb and hold), and Resilience (recover and renew) — and 15 underlying capabilities.
 
 You will be given:
-- The aggregated team scores per pillar and per capability
-- The spread (max minus min) for each capability across respondents
-- The top-5 weakest capabilities (the "focus areas") with their scores and spreads
-- A list of the baseline action items already prepared for each focus-area capability
+- The aggregated team scores per pillar and per capability (band labels only)
+- The spread (how much respondents disagree) for each capability
+- The top-5 weakest capabilities (the "focus areas") with their bands and spread signals
+- Baseline action items the consultant typically uses for each focus-area capability — FOR REFERENCE ONLY, not for paraphrasing
 - The current filter context (which subset of respondents this report describes)
 - The sample size (how many respondents are included in this view)
-- An anonymized list of individual respondents labeled by letter, with their demographics (department, level, tenure band) and per-capability scores — never names
+- An anonymized list of individual respondents labeled by letter, with their demographics (department, level, tenure band) and per-capability score band tallies — never names
 
 Your job is to produce TWO things, returned as a single JSON object:
 
-1. An "executive_summary" paragraph: one paragraph, no more than 120 words, that interprets the result for this filter context and points to the leading concern. Reference the band names ("Critical Gap", "Needs Work", "Solid", "Strong") but never the numeric scores. If spread is high on a focus-area capability, acknowledge the divergence as itself a finding.
+1. An "executive_summary": an ARRAY of 3 to 5 short bullet strings. Each bullet must surface a CORRELATION — a relationship between two or more data points the reader could not have spotted by glancing at the numbers. Acceptable correlation types include:
+   - Pillar interplay ("Toughness rates Solid but Resilience rates Needs Work — the organization can absorb shocks but struggles to renew afterward.")
+   - Within-pillar tension ("Decision Velocity is Strong while Adaptive Governance is Needs Work — leaders move fast but rules-of-the-game haven't caught up.")
+   - Demographic gap ("Senior leaders rate Risk Discipline Solid; managers rate it Needs Work — a meaningful gap in shared visibility.")
+   - Spread as signal ("Trust & Collaboration shows the widest disagreement of any capability — some respondents see strong cross-functional ties, others see silos.")
+   - Focus-area concentration ("Three of the top-5 focus areas sit in Resilience, suggesting renewal is the binding constraint, not raw operational toughness.")
+   Each bullet ≤ 30 words. NO bullet may merely state a single capability's band — the value of the bullet IS the relationship.
 
-2. An "action_items" object: a dictionary keyed by capability name (one key per focus-area capability), with each value being an array of exactly 2 strings. Each string is one action item, no more than 25 words, action-oriented (verb-first when natural), in plain English. Use the baseline action items provided as your starting point — adapt them to the filter context and the spread/sample-size signals. Do not invent new categories of action; stay grounded in the methodology.
+2. An "action_items" object: a dictionary keyed by capability name (one key per focus-area capability), with each value being an array of exactly 2 strings.
+   Each action item ≤ 40 words. Each action item MUST cite at least one of:
+   - A spread signal (when the team is split on this capability)
+   - A demographic pattern (which level, department, or tenure band drives the gap)
+   - The filter context (e.g., "for this Sales × Manager segment...")
+   - A tension with another capability (named explicitly)
+   Action items must be SUBSTANTIVELY DIFFERENT from the baseline action items provided. If your action item could be lifted into any other organization's report unchanged, it has not been adapted — produce something that names a data signal.
 
 Hard rules:
-- Never reference numeric scores in any output. Use band names instead.
+- Never reference numeric scores in any output. Use band names ("Critical Gap", "Needs Work", "Solid", "Strong") instead.
 - Never name individual respondents (you only see letters anyway, but do not refer to "Respondent A" in output).
 - Never invent organization-specific facts (industry, history, competitors, internal initiatives) — you have not been told these.
 - Never include emoji, exclamation marks, or marketing language.
-- Use the executive register: serious, confident, plain English, active voice, short sentences.
+- Use the executive register: serious, confident, plain English, active voice.
 - Always write in the third person about "the organization" or "this segment" — never address "you" or "your team" directly.
 - Always return valid JSON conforming to the schema given in the user prompt. Do not wrap the JSON in markdown code fences.
-- If you must include a caveat about sample size, do it once, in the executive_summary, not in every action item.`
+- If you must include a caveat about sample size, do it in one bullet of the executive_summary, not in every action item.`
 
 /** Spread > this triggers the "team is split" framing per spec 14 § 3 notes. */
 const SPREAD_HIGH_THRESHOLD = 1.0
@@ -66,14 +95,14 @@ export interface BuiltPrompt {
   user: string
   /**
    * The capability *labels* the LLM is expected to produce as keys in
-   * action_items, in spec-14 ranked order. Slice 7.4 will use this list
-   * to validate the response shape before caching.
+   * action_items, in spec-14 ranked order. The validator uses this to
+   * check the response shape before caching.
    */
   expectedActionItemKeys: string[]
   /**
    * The anonymized respondent payload that was serialized into the prompt.
-   * Slice 7.3 stores this in GeneratedReport.inputJson as the audit trail
-   * (Q4/A — store the *stripped* version, not the pre-strip).
+   * Stored in GeneratedReport.inputJson as the audit trail (Q4/A — store
+   * the *stripped* version, not the pre-strip).
    */
   anonymizedRespondents: AnonymizedRespondent[]
 }
@@ -122,8 +151,6 @@ function formatUserPrompt(input: GenerateReportInput, anon: AnonymizedRespondent
     for (const { key, result } of sorted) {
       lines.push(`  - ${CAPABILITY_LABELS[key]} (${formatCapabilityBands(result)})`)
     }
-    // Capabilities with insufficient data are listed last so the model
-    // sees them but knows they're not scored.
     const insufficient = caps.filter((c) => aggregates.capabilities[c].score === null)
     for (const c of insufficient) {
       lines.push(`  - ${CAPABILITY_LABELS[c]} (insufficient data)`)
@@ -141,7 +168,7 @@ function formatUserPrompt(input: GenerateReportInput, anon: AnonymizedRespondent
       lines.push(
         `${i + 1}. ${CAPABILITY_LABELS[capKey]} (${PILLAR_LABELS[pillar]}) — ${formatCapabilityBands(r)}`,
       )
-      lines.push('   Baseline action items (use as starting point — adapt to this segment):')
+      lines.push('   Baseline action items the consultant typically uses (FOR REFERENCE ONLY — your action items must be substantively different, not paraphrases):')
       for (const item of baselineFor(capKey)) {
         lines.push(`   - ${item}`)
       }
@@ -163,14 +190,22 @@ function formatUserPrompt(input: GenerateReportInput, anon: AnonymizedRespondent
 
   lines.push('OUTPUT JSON SCHEMA (return exactly this shape, valid JSON, no markdown fence):')
   lines.push('{')
-  lines.push('  "executive_summary": "string, one paragraph, ≤120 words",')
+  lines.push('  "executive_summary": [')
+  lines.push('    "Correlation bullet 1, ≤30 words, names a relationship between data points.",')
+  lines.push('    "Correlation bullet 2, ≤30 words, names a relationship between data points.",')
+  lines.push('    "Correlation bullet 3, ≤30 words, names a relationship between data points."')
+  lines.push('    // 3 to 5 entries total. Each must be a relationship, not a single-capability statement.')
+  lines.push('  ],')
   lines.push('  "action_items": {')
   if (aggregates.focusAreas.length === 0) {
     lines.push('    // No focus areas → return an empty object {}.')
   } else {
     aggregates.focusAreas.forEach((capKey, i) => {
       const trail = i < aggregates.focusAreas.length - 1 ? ',' : ''
-      lines.push(`    "${CAPABILITY_LABELS[capKey]}": ["string ≤25 words", "string ≤25 words"]${trail}`)
+      lines.push(`    "${CAPABILITY_LABELS[capKey]}": [`)
+      lines.push(`      "Action 1 ≤40 words, MUST cite a data signal (spread, demographic pattern, filter context, or named capability tension).",`)
+      lines.push(`      "Action 2 ≤40 words, MUST cite a data signal (spread, demographic pattern, filter context, or named capability tension)."`)
+      lines.push(`    ]${trail}`)
     })
   }
   lines.push('  }')
@@ -209,11 +244,6 @@ function formatCapabilityBands(r: { band: BandKey | null; spread: number | null;
   return `${baseLabel} — team is split`
 }
 
-/**
- * Per spec 14 § 3 notes: serialize a respondent's 15-capability vector as a
- * compact band tally rather than per-capability listings, to keep prompt
- * size manageable on large samples.
- */
 function capabilityBandsSummary(caps: Record<CapabilityKey, number | null>): string {
   const tally: Record<BandKey, number> = {
     critical_gap: 0,

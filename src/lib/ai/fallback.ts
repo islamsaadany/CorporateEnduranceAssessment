@@ -33,11 +33,16 @@ export function buildFallback(input: FallbackInput): AiReportOutput {
   const baseSummary =
     input.overallBand !== null ? SUMMARY_BY_BAND[input.overallBand] : SUMMARY_NO_BAND
 
-  // Spec 14 § 5.1: when N < total, prepend a sample-size disclaimer.
-  const summary =
-    input.matchingFilter < input.totalSubmitted
-      ? `Based on ${input.matchingFilter} of ${input.totalSubmitted} respondents — interpret as preliminary. ${baseSummary}`
-      : baseSummary
+  // Spec 14 § 5.1: when N < total, prepend a sample-size disclaimer
+  // as a separate bullet so the rest of the static summary stays
+  // readable. Prompt v2 changed executive_summary to a bullet array.
+  const summaryBullets: string[] = []
+  if (input.matchingFilter < input.totalSubmitted) {
+    summaryBullets.push(
+      `Based on ${input.matchingFilter} of ${input.totalSubmitted} respondents — interpret as preliminary.`,
+    )
+  }
+  summaryBullets.push(baseSummary)
 
   const focusAreaActions = input.focusAreas.map((capability) => ({
     capability,
@@ -45,7 +50,7 @@ export function buildFallback(input: FallbackInput): AiReportOutput {
   }))
 
   return {
-    executiveSummary: summary,
+    executiveSummary: summaryBullets,
     focusAreaActions,
   }
 }

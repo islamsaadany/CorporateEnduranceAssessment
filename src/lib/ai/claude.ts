@@ -22,7 +22,9 @@ async function generate(input: { system: string; user: string; apiKey: string })
   const response = await client.messages.create({
     model: MODEL_NAME,
     max_tokens: 2000,
-    temperature: 0.3,
+    // Spec 14 § 3 (prompt v2): 0.5 trades a little structural
+    // consistency for more lift in correlation phrasing.
+    temperature: 0.5,
     system: input.system,
     messages: [{ role: 'user', content: input.user }],
   })

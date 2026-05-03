@@ -25,8 +25,9 @@ async function generate(input: { system: string; user: string; apiKey: string })
       contents: input.user,
       config: {
         systemInstruction: input.system,
-        // Spec 14 § 3: tighten output for structural consistency.
-        temperature: 0.3,
+        // Spec 14 § 3 (prompt v2): 0.5 trades a little structural
+        // consistency for more lift in correlation phrasing.
+        temperature: 0.5,
         maxOutputTokens: 2000,
         responseMimeType: 'application/json',
         abortSignal: controller.signal,

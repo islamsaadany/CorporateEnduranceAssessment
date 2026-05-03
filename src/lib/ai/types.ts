@@ -51,15 +51,15 @@ export interface GenerateReportInput {
   respondents: RespondentForPrompt[]
 }
 
-// ─── Raw LLM JSON shape (spec 14 § 1) ────────────────────────────────────
+// ─── Raw LLM JSON shape (spec 14 § 1, prompt v2) ─────────────────────────
 //
-// Keys of action_items are the capability *labels* exactly as they appear
-// in src/data/constants.ts (e.g. "Decision Velocity"), not the snake_case
-// CapabilityKey enum values. The orchestrator maps labels back to keys
-// after parsing.
+// executive_summary: ARRAY of 3 to 5 correlation bullets, each ≤30 words
+// action_items:      keyed by capability *labels* exactly as they appear
+//                    in src/data/constants.ts (e.g. "Decision Velocity"),
+//                    each value is exactly 2 strings, each ≤40 words
 
 export const aiResponseSchema = z.object({
-  executive_summary: z.string().min(1).max(2000),
+  executive_summary: z.array(z.string().min(1)).min(3).max(5),
   action_items: z.record(z.string(), z.array(z.string()).length(2)),
 })
 

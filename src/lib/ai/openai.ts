@@ -18,7 +18,9 @@ async function generate(input: { system: string; user: string; apiKey: string })
   const client = new OpenAI({ apiKey: input.apiKey, timeout: REQUEST_TIMEOUT_MS })
   const response = await client.chat.completions.create({
     model: MODEL_NAME,
-    temperature: 0.3,
+    // Spec 14 § 3 (prompt v2): 0.5 trades a little structural
+    // consistency for more lift in correlation phrasing.
+    temperature: 0.5,
     max_tokens: 2000,
     response_format: { type: 'json_object' },
     messages: [

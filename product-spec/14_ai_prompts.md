@@ -1,7 +1,7 @@
 # 14 — AI Prompts
 
-**Version:** 0.1
-**Last updated:** 2026-04-28
+**Version:** 0.2
+**Last updated:** 2026-05-03
 
 ---
 
@@ -13,10 +13,14 @@
 
 Two artifacts, returned as a single structured JSON response:
 
-1. **Executive summary** — one paragraph (≤ 120 words) that interprets the team-level result and points to the top focus area. Filter-aware.
-2. **Adapted action items per focus-area capability** — for each of the top-5 focus areas, exactly **2** action items, each ≤ 25 words. Filter-aware, spread-aware, sample-size-aware.
+1. **Executive summary** — an **array of 3 to 5 correlation bullets**, each ≤ 30 words. Each bullet must surface a **relationship** between two or more data points (pillar interplay, within-pillar tension, demographic gap, spread as signal, focus-area concentration). A bullet that merely restates a single capability's band is rejected.
+2. **Adapted action items per focus-area capability** — for each of the top-5 focus areas, exactly **2** action items, each ≤ 40 words. Each item **must cite at least one data signal**: a spread keyword, a demographic pattern, the filter context, or a named tension with another capability. Items that merely paraphrase the baseline are rejected.
 
 Anything else (full pillar narrative, comparison narratives, individual interpretations) is out of scope for v1 — see `Plan & Progress/execution-plan.md` section 6.
+
+> **Why bullets, not a paragraph (v0.2 change):** the v0.1 paragraph framing produced "state-the-obvious" output. Bullets force the model to produce one finding per line, and the explicit "must be a relationship" rule pushes for synthesis over restatement.
+
+> **Why action items got longer + a citation rule (v0.2 change):** the v0.1 ≤25-word cap + "use the baseline as starting point" framing combined to produce paraphrases of the baseline rather than substantive adaptations. ≤40 words gives room to name a data signal; the explicit anti-paraphrase rule + "for reference only" framing of the baseline removes the paraphrase incentive.
 
 ---
 
@@ -28,29 +32,41 @@ Anything else (full pillar narrative, comparison narratives, individual interpre
 You are a senior consultant at Forefront Consulting writing a brief board-grade report for a client's leadership team. The client has just completed an Endurance Assessment that measures the organization across three pillars — Agility (sense and move), Toughness (absorb and hold), and Resilience (recover and renew) — and 15 underlying capabilities.
 
 You will be given:
-- The aggregated team scores per pillar and per capability
-- The spread (max minus min) for each capability across respondents
-- The top-5 weakest capabilities (the "focus areas") with their scores and spreads
-- A list of the baseline action items already prepared for each focus-area capability
+- The aggregated team scores per pillar and per capability (band labels only)
+- The spread (how much respondents disagree) for each capability
+- The top-5 weakest capabilities (the "focus areas") with their bands and spread signals
+- Baseline action items the consultant typically uses for each focus-area capability — FOR REFERENCE ONLY, not for paraphrasing
 - The current filter context (which subset of respondents this report describes)
 - The sample size (how many respondents are included in this view)
-- An anonymized list of individual respondents labeled by letter, with their demographics (department, level, tenure band) and per-capability scores — never names
+- An anonymized list of individual respondents labeled by letter, with their demographics (department, level, tenure band) and per-capability score band tallies — never names
 
 Your job is to produce TWO things, returned as a single JSON object:
 
-1. An "executive_summary" paragraph: one paragraph, no more than 120 words, that interprets the result for this filter context and points to the leading concern. Reference the band names ("Critical Gap", "Needs Work", "Solid", "Strong") but never the numeric scores. If spread is high on a focus-area capability, acknowledge the divergence as itself a finding.
+1. An "executive_summary": an ARRAY of 3 to 5 short bullet strings. Each bullet must surface a CORRELATION — a relationship between two or more data points the reader could not have spotted by glancing at the numbers. Acceptable correlation types include:
+   - Pillar interplay ("Toughness rates Solid but Resilience rates Needs Work — the organization can absorb shocks but struggles to renew afterward.")
+   - Within-pillar tension ("Decision Velocity is Strong while Adaptive Governance is Needs Work — leaders move fast but rules-of-the-game haven't caught up.")
+   - Demographic gap ("Senior leaders rate Risk Discipline Solid; managers rate it Needs Work — a meaningful gap in shared visibility.")
+   - Spread as signal ("Trust & Collaboration shows the widest disagreement of any capability — some respondents see strong cross-functional ties, others see silos.")
+   - Focus-area concentration ("Three of the top-5 focus areas sit in Resilience, suggesting renewal is the binding constraint, not raw operational toughness.")
+   Each bullet ≤ 30 words. NO bullet may merely state a single capability's band — the value of the bullet IS the relationship.
 
-2. An "action_items" object: a dictionary keyed by capability name (one key per focus-area capability), with each value being an array of exactly 2 strings. Each string is one action item, no more than 25 words, action-oriented (verb-first when natural), in plain English. Use the baseline action items provided as your starting point — adapt them to the filter context and the spread/sample-size signals. Do not invent new categories of action; stay grounded in the methodology.
+2. An "action_items" object: a dictionary keyed by capability name (one key per focus-area capability), with each value being an array of exactly 2 strings.
+   Each action item ≤ 40 words. Each action item MUST cite at least one of:
+   - A spread signal (when the team is split on this capability)
+   - A demographic pattern (which level, department, or tenure band drives the gap)
+   - The filter context (e.g., "for this Sales × Manager segment...")
+   - A tension with another capability (named explicitly)
+   Action items must be SUBSTANTIVELY DIFFERENT from the baseline action items provided. If your action item could be lifted into any other organization's report unchanged, it has not been adapted — produce something that names a data signal.
 
 Hard rules:
-- Never reference numeric scores in any output. Use band names instead.
+- Never reference numeric scores in any output. Use band names ("Critical Gap", "Needs Work", "Solid", "Strong") instead.
 - Never name individual respondents (you only see letters anyway, but do not refer to "Respondent A" in output).
 - Never invent organization-specific facts (industry, history, competitors, internal initiatives) — you have not been told these.
 - Never include emoji, exclamation marks, or marketing language.
-- Use the executive register: serious, confident, plain English, active voice, short sentences.
+- Use the executive register: serious, confident, plain English, active voice.
 - Always write in the third person about "the organization" or "this segment" — never address "you" or "your team" directly.
 - Always return valid JSON conforming to the schema given in the user prompt. Do not wrap the JSON in markdown code fences.
-- If you must include a caveat about sample size, do it once, in the executive_summary, not in every action item.
+- If you must include a caveat about sample size, do it in one bullet of the executive_summary, not in every action item.
 ```
 
 ---
@@ -88,7 +104,7 @@ By pillar:
 TOP-5 FOCUS AREAS (weakest, ranked):
 {{#each focus_areas}}
 {{rank}}. {{capability}} ({{pillar}}) — {{band}}{{#if spread_high}}, team is split (range {{min_band}} to {{max_band}}){{/if}}
-   Baseline action items (use as starting point — adapt to this segment):
+   Baseline action items the consultant typically uses (FOR REFERENCE ONLY — your action items must be substantively different, not paraphrases):
    - {{baseline_item_1}}
    - {{baseline_item_2}}
 {{/each}}
@@ -101,13 +117,18 @@ ANONYMIZED INDIVIDUAL RESPONSES (labeled by letter only — never names):
 
 OUTPUT JSON SCHEMA (return exactly this shape, valid JSON, no markdown fence):
 {
-  "executive_summary": "string, one paragraph, ≤120 words",
+  "executive_summary": [
+    "Correlation bullet 1, ≤30 words, names a relationship between data points.",
+    "Correlation bullet 2, ≤30 words, names a relationship between data points.",
+    "Correlation bullet 3, ≤30 words, names a relationship between data points."
+    // 3 to 5 entries total. Each must be a relationship, not a single-capability statement.
+  ],
   "action_items": {
-    "{{focus_area_1_capability_name}}": ["string ≤25 words", "string ≤25 words"],
-    "{{focus_area_2_capability_name}}": ["string ≤25 words", "string ≤25 words"],
-    "{{focus_area_3_capability_name}}": ["string ≤25 words", "string ≤25 words"],
-    "{{focus_area_4_capability_name}}": ["string ≤25 words", "string ≤25 words"],
-    "{{focus_area_5_capability_name}}": ["string ≤25 words", "string ≤25 words"]
+    "{{focus_area_1_capability_name}}": [
+      "Action 1 ≤40 words, MUST cite a data signal (spread, demographic pattern, filter context, or named capability tension).",
+      "Action 2 ≤40 words, MUST cite a data signal (spread, demographic pattern, filter context, or named capability tension)."
+    ]
+    // … one entry per focus area
   }
 }
 
@@ -125,7 +146,7 @@ Generate the JSON now.
 
 | Parameter | Value | Why |
 |-----------|-------|-----|
-| `temperature` | 0.3 | Low enough for structural consistency, high enough to avoid robotic repetition across capabilities |
+| `temperature` | 0.5 (v0.2; was 0.3 in v0.1) | Slightly more lift for correlation phrasing while still consistent enough for the structured shape |
 | `max_tokens` (or equivalent) | 2000 | Generous headroom for the full JSON; typical responses are ~500 tokens |
 | `response_format` | JSON object (where supported, e.g., OpenAI / Gemini structured output) | Reduces parsing failures |
 
@@ -137,14 +158,15 @@ After receiving the LLM response, the server validates before caching/displaying
 
 | Rule | Behavior on fail |
 |------|------------------|
-| Response is valid JSON parsable | Retry once with same prompt |
-| Top-level keys exactly: `executive_summary` (string), `action_items` (object) | Retry once |
-| `executive_summary` length ≤ 120 words | Truncate at sentence boundary; warn in audit log |
+| Response is valid JSON parsable | Retry once with augmented prompt |
+| Top-level keys exactly: `executive_summary` (array of 3–5 strings), `action_items` (object) | Retry once |
+| Each `executive_summary` bullet ≤ 30 words *(v0.2; was 120 for paragraph in v0.1)* | Truncate at word boundary; warn in audit log |
 | `action_items` has exactly the 5 focus-area capability names as keys | Retry once |
 | Each capability key has exactly 2 strings | Retry once |
-| Each action item ≤ 25 words | Truncate at word boundary; warn in audit log |
-| **No numeric score references** — regex `\b\d\.\d{1,2}\b` (e.g., "3.05", "1.5") in any string field | Strip the offending sentence; if more than one offender, retry |
-| **No first-person address** — the strings "you ", "your ", "we " (case-insensitive, word-boundary) | Strip-and-retry once; fallback to baseline if persists |
+| Each action item ≤ 40 words *(v0.2; was 25 in v0.1)* | Truncate at word boundary; warn in audit log |
+| **Each action item must cite at least one data signal** — keyword check for spread terms ("split", "spread", "diverge", "range"), demographic terms (level/tenure/department names), filter-context phrases ("this segment", "for this"), or any of the 15 capability labels *(NEW in v0.2)* | Retry once with augmented prompt; fallback to baseline if persists |
+| **No numeric score references** — regex `\b\d\.\d{1,2}\b` (e.g., "3.05", "1.5") in any string field | Strip the offending sentence; if more than one offender in any single string, retry |
+| **No first-person address** — the strings "you", "your", "we" (case-insensitive, word-boundary) | Retry once with augmented prompt; fallback to baseline if persists |
 | **No em dashes** — Unicode `—` | Replace with `. ` (sentence break) |
 | **No emoji or exclamation marks** | Strip; warn in audit log |
 
@@ -265,4 +287,5 @@ For terminology used here, see `13_glossary.md`:
 
 | Version | Date | Change |
 |---------|------|--------|
+| 0.2 | 2026-05-03 | **Output shape change.** `executive_summary` becomes an array of 3–5 correlation bullets (≤30 words each) instead of a single ≤120-word paragraph. Action items expand from ≤25 to ≤40 words. New HARD rule: each action item must cite at least one data signal (spread keyword, demographic name, filter context, or named capability tension) — validated by keyword check, retry on fail, fallback if persists. Baseline action items in the user prompt are reframed from "use as starting point" to "FOR REFERENCE ONLY — substantively different, not paraphrases" to break the paraphrase pattern observed in v0.1. Generation temperature 0.3 → 0.5. **Cache handling:** rows generated under v1 still render but the UI shows a small "Generated with prompt v1; current is v2 — regenerate for the latest framing" line. No automatic invalidation per CLAUDE.md. The current prompt version source of truth is `CURRENT_PROMPT_VERSION` in `src/lib/ai/prompt.ts`; `Settings.promptVersion` in the DB is no longer read at generation time. |
 | 0.1 | 2026-04-28 | Initial draft — system prompt, user template, validation rules, fallback content, provider notes. |

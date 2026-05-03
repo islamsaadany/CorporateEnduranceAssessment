@@ -16,7 +16,7 @@ import { decryptSecret } from '@/lib/crypto'
 import { claudeAdapter } from './claude'
 import { geminiAdapter } from './gemini'
 import { openaiAdapter } from './openai'
-import { buildPrompt } from './prompt'
+import { CURRENT_PROMPT_VERSION, buildPrompt } from './prompt'
 import { buildFallback } from './fallback'
 import {
   aiResponseSchema,
@@ -88,7 +88,12 @@ export async function resolveActiveProvider(): Promise<ResolvedProvider> {
       apiKey,
       source: 'db',
       model: ADAPTERS[provider].modelName,
-      promptVersion: settings.promptVersion,
+      // Source of truth for the current prompt version is the
+      // CURRENT_PROMPT_VERSION constant in src/lib/ai/prompt.ts —
+      // bumped together with the prompt wording. Settings.promptVersion
+      // in the DB is kept for legacy reasons but ignored here so that
+      // a deploy carries the version forward without a SQL paste.
+      promptVersion: CURRENT_PROMPT_VERSION,
     }
   }
 
@@ -99,7 +104,12 @@ export async function resolveActiveProvider(): Promise<ResolvedProvider> {
       apiKey: envKey,
       source: 'env',
       model: ADAPTERS[provider].modelName,
-      promptVersion: settings.promptVersion,
+      // Source of truth for the current prompt version is the
+      // CURRENT_PROMPT_VERSION constant in src/lib/ai/prompt.ts —
+      // bumped together with the prompt wording. Settings.promptVersion
+      // in the DB is kept for legacy reasons but ignored here so that
+      // a deploy carries the version forward without a SQL paste.
+      promptVersion: CURRENT_PROMPT_VERSION,
     }
   }
 
@@ -236,6 +246,16 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
 
   const prompt = buildPrompt(input)
 
+  // Department names that appear in the input — handed to validate() so
+  // the signal-citation rule recognizes them as legitimate citations.
+  const departmentNamesInPrompt = Array.from(
+    new Set(
+      input.respondents
+        .map((r) => r.department)
+        .filter((d): d is string => typeof d === 'string' && d.length > 0),
+    ),
+  )
+
   // Attempt 1
   const a1 = await callAndValidate({
     system: prompt.system,
@@ -243,6 +263,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
     apiKey: resolved.apiKey,
     provider: resolved.provider,
     focusAreas: input.aggregates.focusAreas,
+    departmentNamesInPrompt,
   })
   if (a1.ok) {
     return {
@@ -266,6 +287,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
     apiKey: resolved.apiKey,
     provider: resolved.provider,
     focusAreas: input.aggregates.focusAreas,
+    departmentNamesInPrompt,
   })
   if (a2.ok) {
     return {
@@ -302,6 +324,7 @@ interface CallAndValidateInput {
   apiKey: string
   provider: Provider
   focusAreas: CapabilityKey[]
+  departmentNamesInPrompt: string[]
 }
 
 type CallAndValidateResult =
@@ -340,11 +363,11 @@ async function callAndValidate(input: CallAndValidateInput): Promise<CallAndVali
     return {
       ok: false,
       reason: 'shape_mismatch',
-      detail: `Top-level shape is wrong (expected { executive_summary: string, action_items: object }).`,
+      detail: `Top-level shape is wrong (expected { executive_summary: string[3..5], action_items: object }).`,
     }
   }
 
-  const validated = validate(shape.data, input.focusAreas)
+  const validated = validate(shape.data, input.focusAreas, input.departmentNamesInPrompt)
   if (!validated.ok) {
     return { ok: false, reason: validated.reason, detail: validated.detail }
   }
@@ -394,7 +417,7 @@ export class AiConfigError extends Error {
 
 // ─── Re-exports ──────────────────────────────────────────────────────────
 
-export { buildPrompt } from './prompt'
+export { CURRENT_PROMPT_VERSION, buildPrompt } from './prompt'
 export { anonymizeRespondents, indexToLetter } from './strip-names'
 export { readCachedReport, writeCachedReport, invalidateCachesForAssessment } from './cache'
 export type {

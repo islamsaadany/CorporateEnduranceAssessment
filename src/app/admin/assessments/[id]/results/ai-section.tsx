@@ -1,13 +1,17 @@
-// AI Insights section (slice 7.3). Shows the AI-written executive
-// summary for the active filter, plus the Generate / Regenerate button.
+// AI Insights section (slice 7.3 + prompt v2).
 //
-// Server component. Pre-fetches the cached row server-side so a refresh
-// always serves the latest cache without an extra network round-trip.
+// Server component. Renders the cached AI executive summary as a list
+// of correlation bullets (prompt v2; was a single paragraph in v1).
 //
 // Pre-closure generations carry isDraft=true and render an amber
-// "PRELIMINARY DRAFT" pill above the summary per spec 15 § 1.
+// "PRELIMINARY DRAFT" pill above the bullets per spec 15 § 1.
+//
+// Cached rows whose promptVersion < CURRENT_PROMPT_VERSION render with a
+// small "Generated with prompt v{N}; current is v{M} — regenerate for the
+// latest framing" line. Per CLAUDE.md we never silently invalidate.
 
 import type { AiReportOutput } from '@/data/types'
+import { CURRENT_PROMPT_VERSION } from '@/lib/ai'
 import { GenerateButton } from './generate-button'
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -74,9 +78,13 @@ export function AiSection({
           />
         ) : cached ? (
           <div className="space-y-5">
-            <p className="font-serif text-base leading-relaxed text-brand-dark-blue">
-              {cached.outputJson.executiveSummary}
-            </p>
+            <SummaryBullets bullets={cached.outputJson.executiveSummary} />
+            {cached.promptVersion < CURRENT_PROMPT_VERSION ? (
+              <p className="text-[11px] italic text-brand-grey-text">
+                Generated with prompt v{cached.promptVersion}; current is v{CURRENT_PROMPT_VERSION}.
+                Regenerate to use the latest framing.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-3 border-t border-brand-grey-light pt-4">
               <GenerateButton
                 assessmentId={assessmentId}
@@ -103,6 +111,26 @@ export function AiSection({
         )}
       </div>
     </section>
+  )
+}
+
+function SummaryBullets({ bullets }: { bullets: string[] }) {
+  if (bullets.length === 0) {
+    return (
+      <p className="text-sm italic text-brand-grey-text">
+        AI returned no summary bullets.
+      </p>
+    )
+  }
+  return (
+    <ul className="space-y-2.5">
+      {bullets.map((b, i) => (
+        <li key={i} className="flex gap-3">
+          <span className="mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-brand-ochre" />
+          <span className="font-serif text-base leading-relaxed text-brand-dark-blue">{b}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

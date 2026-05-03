@@ -1,23 +1,35 @@
 /**
- * Spec-14 § 4 validators for the LLM response.
+ * Spec-14 § 4 validators (prompt v2).
  *
  * Two failure categories:
- *   - Hard fail   → the route should retry once with an augmented prompt;
- *                   if the second attempt also hard-fails, the orchestrator
- *                   returns the static baseline fallback.
+ *   - Hard fail   → orchestrator retries once with augmented prompt; if
+ *                   the second attempt also hard-fails, returns the
+ *                   static baseline fallback (not cached).
  *   - Soft fix    → applied silently in place; the orchestrator records
- *                   which fixes were applied so the audit log can capture
- *                   per-call quality signals.
+ *                   which fixes were applied (audit metadata).
  *
- * All validators are pure. The orchestrator in src/lib/ai/index.ts wires
- * them into the retry/fallback control flow.
+ * Caller (src/lib/ai/index.ts) is responsible for JSON.parse + the
+ * structural Zod check from src/lib/ai/types.ts.
+ *
+ * Prompt v2 changes vs v1:
+ *   - executive_summary is an ARRAY of 3–5 bullets, each ≤30 words
+ *     (was a single ≤120-word paragraph)
+ *   - action items ≤40 words (was ≤25)
+ *   - new HARD rule: each action item must cite at least one data
+ *     signal (spread keyword, demographic name, filter context, or
+ *     a named capability label)
  */
 
-import { CAPABILITY_LABELS } from '@/data/constants'
+import {
+  CAPABILITY_LABELS,
+  CAPABILITY_ORDER,
+  LEVEL_LABELS,
+  TENURE_LABELS,
+} from '@/data/constants'
 import type { AiReportOutput, CapabilityKey } from '@/data/types'
 
 export type SoftFix =
-  | 'truncated_summary'
+  | 'truncated_summary_bullet'
   | 'truncated_action_item'
   | 'replaced_em_dashes'
   | 'stripped_emoji_or_exclamation'
@@ -30,34 +42,78 @@ export type HardFailReason =
   | 'wrong_action_count'
   | 'first_person_address'
   | 'multiple_numeric_references'
+  | 'missing_signal_citation'
 
 export type ValidationOutcome =
   | { ok: true; output: AiReportOutput; softFixes: SoftFix[] }
   | { ok: false; reason: HardFailReason; detail: string }
 
-const SUMMARY_WORD_LIMIT = 120
-const ACTION_WORD_LIMIT = 25
+const SUMMARY_BULLET_WORD_LIMIT = 30
+const ACTION_WORD_LIMIT = 40
 
-// Spec 14 § 4: \b\d\.\d{1,2}\b — e.g., "3.05", "1.5"
 const NUMERIC_SCORE_RE = /\b\d\.\d{1,2}\b/g
-// Spec 14 § 4: word-boundary, case-insensitive, "you ", "your ", "we ".
 const FIRST_PERSON_RE = /\b(?:you|your|we)\b/gi
-// Match emoji per Unicode pictographic class.
 const EMOJI_RE = /\p{Extended_Pictographic}/gu
 
 interface RawAi {
-  executive_summary: string
+  executive_summary: string[]
   action_items: Record<string, string[]>
 }
 
 /**
- * Run the full pipeline. Caller (src/lib/ai/index.ts) is responsible for
- * having already done JSON.parse + the structural Zod check from
- * src/lib/ai/types.ts. This function takes the parsed-and-shape-checked
- * object and applies the per-spec § 4 rules.
+ * Lazy-built keyword lookup for the signal-citation rule. Includes:
+ *   - "spread", "split", "diverge", "disagree", "range", "spans"  (spread)
+ *   - all 4 LEVEL labels' lowercase tokens (e.g. "manager", "leader")
+ *   - all 5 TENURE labels' canonical tokens (e.g. "1–3", "4–7", "<1")
+ *   - all 15 CAPABILITY labels (e.g. "Decision Velocity")
+ *   - "this segment", "for this", "this filter"  (filter context)
+ *   - per-call: the actual department names appearing in the input
+ *
+ * The check is a substring search after lowercasing both sides — false
+ * positives are tolerated; the goal is to catch action items that fail
+ * to mention ANY data signal at all.
  */
-export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOutcome {
+function buildSignalKeywords(extraDepartments: string[]): string[] {
+  const keywords: string[] = []
+  // Spread signals
+  keywords.push('spread', 'split', 'diverge', 'disagre', 'range', 'spans', 'team is split')
+  // Demographic level keywords (split each label on slashes; lowercase parts)
+  for (const lbl of Object.values(LEVEL_LABELS)) {
+    for (const part of lbl.split('/')) keywords.push(part.trim().toLowerCase())
+  }
+  // Tenure tokens
+  for (const lbl of Object.values(TENURE_LABELS)) {
+    keywords.push(lbl.toLowerCase())
+  }
+  keywords.push('tenure', 'senior', 'junior', 'early-career', 'years')
+  // Capability labels (any name-drop counts as a tension citation)
+  for (const lbl of Object.values(CAPABILITY_LABELS)) {
+    keywords.push(lbl.toLowerCase())
+  }
+  // Filter context phrases
+  keywords.push('this segment', 'for this', 'this filter', 'across this group', 'in this view')
+  // Departments seen in this run
+  for (const d of extraDepartments) keywords.push(d.toLowerCase())
+  return keywords
+}
+
+function citesSignal(text: string, keywords: string[]): boolean {
+  const lower = text.toLowerCase()
+  return keywords.some((k) => k.length > 0 && lower.includes(k))
+}
+
+/**
+ * Run the full pipeline. The third arg is the list of department names
+ * that appeared in the prompt input — they're admin-defined so we can't
+ * hardcode them, but we want them as valid signal citations.
+ */
+export function validate(
+  raw: RawAi,
+  focusAreas: CapabilityKey[],
+  departmentNamesInPrompt: string[],
+): ValidationOutcome {
   const softFixes: SoftFix[] = []
+  const signalKeywords = buildSignalKeywords(departmentNamesInPrompt)
 
   // ── Hard checks on action_items keys ────────────────────────────────
   const expectedLabels = focusAreas.map((c) => CAPABILITY_LABELS[c])
@@ -101,10 +157,13 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
     }
   }
 
-  // ── Soft fix: em dashes in summary + actions ─────────────────────────
-  let summary = raw.executive_summary
-  const summaryHadEmDash = summary.includes('—')
-  summary = summary.replaceAll('—', '. ')
+  // ── Soft fix: em dashes in summary bullets + actions ────────────────
+  let summaryBullets = raw.executive_summary.map((b) => b)
+  let summaryHadEmDash = false
+  summaryBullets = summaryBullets.map((b) => {
+    if (b.includes('—')) summaryHadEmDash = true
+    return b.replaceAll('—', '. ')
+  })
 
   const actions: Record<string, [string, string]> = {}
   let anyActionEmDash = false
@@ -120,10 +179,12 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
   // ── Soft fix: strip emoji + exclamation marks ────────────────────────
   const stripExclaim = (s: string) => s.replaceAll('!', '.')
   const stripEmoji = (s: string) => s.replace(EMOJI_RE, '')
-  const summaryHadEmoji = EMOJI_RE.test(summary)
-  EMOJI_RE.lastIndex = 0
-  const summaryHadExclaim = summary.includes('!')
-  summary = stripEmoji(stripExclaim(summary))
+  let summaryHadEmojiOrExclaim = false
+  summaryBullets = summaryBullets.map((b) => {
+    if (EMOJI_RE.test(b) || b.includes('!')) summaryHadEmojiOrExclaim = true
+    EMOJI_RE.lastIndex = 0
+    return stripEmoji(stripExclaim(b))
+  })
   let anyActionEmojiOrExclaim = false
   for (const label of expectedLabels) {
     const [a, b] = actions[label]
@@ -133,24 +194,35 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
     EMOJI_RE.lastIndex = 0
     actions[label] = [stripEmoji(stripExclaim(a)), stripEmoji(stripExclaim(b))]
   }
-  if (summaryHadEmoji || summaryHadExclaim || anyActionEmojiOrExclaim) {
+  if (summaryHadEmojiOrExclaim || anyActionEmojiOrExclaim) {
     softFixes.push('stripped_emoji_or_exclamation')
   }
 
-  // ── Numeric scores: 1 occurrence → strip its sentence; >1 → hard fail
-  const numericMatchesInSummary = summary.match(NUMERIC_SCORE_RE) ?? []
-  if (numericMatchesInSummary.length === 1) {
-    summary = stripSentenceContaining(summary, NUMERIC_SCORE_RE)
-    softFixes.push('stripped_numeric_sentence')
-  } else if (numericMatchesInSummary.length > 1) {
-    return {
-      ok: false,
-      reason: 'multiple_numeric_references',
-      detail: `Executive summary contains ${numericMatchesInSummary.length} numeric score references; spec 14 § 4 forbids any.`,
+  // ── Numeric scores: 1 occurrence in a bullet/action → strip its
+  //    sentence; >1 occurrences in any single string → hard fail.
+  let summaryStrippedNumeric = false
+  summaryBullets = summaryBullets.map((b) => {
+    const matches = b.match(NUMERIC_SCORE_RE) ?? []
+    if (matches.length > 1) {
+      // Defer to hard-fail handler below.
+      return b
+    }
+    if (matches.length === 1) {
+      summaryStrippedNumeric = true
+      return stripSentenceContaining(b, NUMERIC_SCORE_RE)
+    }
+    return b
+  })
+  for (const b of summaryBullets) {
+    const matches = b.match(NUMERIC_SCORE_RE) ?? []
+    if (matches.length > 1) {
+      return {
+        ok: false,
+        reason: 'multiple_numeric_references',
+        detail: `Executive summary bullet contains ${matches.length} numeric score references; spec 14 § 4 forbids any.`,
+      }
     }
   }
-
-  // Also scan action items.
   let actionStrippedNumeric = false
   for (const label of expectedLabels) {
     const [a, b] = actions[label]
@@ -169,20 +241,22 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
     ]
     if (aMatches.length === 1 || bMatches.length === 1) actionStrippedNumeric = true
   }
-  if (actionStrippedNumeric && !softFixes.includes('stripped_numeric_sentence')) {
+  if (summaryStrippedNumeric || actionStrippedNumeric) {
     softFixes.push('stripped_numeric_sentence')
   }
 
-  // ── First-person address: hard fail (spec: strip-and-retry, fallback if persists)
-  if (FIRST_PERSON_RE.test(summary)) {
-    FIRST_PERSON_RE.lastIndex = 0
-    return {
-      ok: false,
-      reason: 'first_person_address',
-      detail: 'Executive summary uses first-person address ("you", "your", or "we"). Spec 14 § 4 forbids this — rewrite in the third person about "the organization" or "this segment".',
+  // ── First-person address: hard fail
+  for (const b of summaryBullets) {
+    if (FIRST_PERSON_RE.test(b)) {
+      FIRST_PERSON_RE.lastIndex = 0
+      return {
+        ok: false,
+        reason: 'first_person_address',
+        detail: 'Executive summary uses first-person address ("you", "your", or "we"). Spec 14 § 4 forbids this — rewrite in the third person about "the organization" or "this segment".',
+      }
     }
+    FIRST_PERSON_RE.lastIndex = 0
   }
-  FIRST_PERSON_RE.lastIndex = 0
   for (const label of expectedLabels) {
     for (const item of actions[label]) {
       if (FIRST_PERSON_RE.test(item)) {
@@ -197,12 +271,31 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
     }
   }
 
-  // ── Word-count truncation (soft fixes) ───────────────────────────────
-  const truncatedSummary = truncateAtSentenceBoundary(summary, SUMMARY_WORD_LIMIT)
-  if (truncatedSummary !== summary) {
-    softFixes.push('truncated_summary')
-    summary = truncatedSummary
+  // ── HARD: every action item must cite at least one data signal.
+  // Skipped when the prompt did not surface enough data to cite (defensive).
+  if (signalKeywords.length > 0) {
+    for (const label of expectedLabels) {
+      for (const item of actions[label]) {
+        if (!citesSignal(item, signalKeywords)) {
+          return {
+            ok: false,
+            reason: 'missing_signal_citation',
+            detail: `Action item under "${label}" does not cite any data signal. Each action item must reference a spread signal (e.g., "split"), a demographic pattern (e.g., "managers"), the filter context, or a named capability tension. Item was: "${item}"`,
+          }
+        }
+      }
+    }
   }
+
+  // ── Word-count truncation (soft fixes) ───────────────────────────────
+  let truncatedAnyBullet = false
+  summaryBullets = summaryBullets.map((b) => {
+    const tb = truncateAtWordBoundary(b, SUMMARY_BULLET_WORD_LIMIT)
+    if (tb !== b) truncatedAnyBullet = true
+    return tb
+  })
+  if (truncatedAnyBullet) softFixes.push('truncated_summary_bullet')
+
   let truncatedAnyAction = false
   for (const label of expectedLabels) {
     const [a, b] = actions[label]
@@ -213,9 +306,7 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
   }
   if (truncatedAnyAction) softFixes.push('truncated_action_item')
 
-  // ── Build the AiReportOutput shape (label → snake_case CapabilityKey).
-  // Validity already guaranteed above (every focusArea has its label in
-  // raw.action_items).
+  // ── Build AiReportOutput ────────────────────────────────────────────
   const focusAreaActions = focusAreas.map((capability) => ({
     capability,
     actions: actions[CAPABILITY_LABELS[capability]],
@@ -223,36 +314,15 @@ export function validate(raw: RawAi, focusAreas: CapabilityKey[]): ValidationOut
 
   return {
     ok: true,
-    output: { executiveSummary: summary.trim(), focusAreaActions },
+    output: {
+      executiveSummary: summaryBullets.map((b) => b.trim()).filter((b) => b.length > 0),
+      focusAreaActions,
+    },
     softFixes,
   }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-
-function countWords(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length
-}
-
-/**
- * Truncate a string at a sentence boundary so the result has ≤ limit
- * words. If the first sentence already exceeds the limit, falls back to
- * a word-boundary truncate.
- */
-function truncateAtSentenceBoundary(s: string, limit: number): string {
-  if (countWords(s) <= limit) return s
-  // Split on sentence terminators (kept).
-  const sentences = s.match(/[^.!?]+[.!?]+\s*/g) ?? [s]
-  let acc = ''
-  for (const sent of sentences) {
-    const candidate = (acc + sent).trim()
-    if (countWords(candidate) > limit) break
-    acc = candidate + ' '
-  }
-  const trimmed = acc.trim()
-  if (trimmed.length === 0) return truncateAtWordBoundary(s, limit)
-  return trimmed
-}
 
 function truncateAtWordBoundary(s: string, limit: number): string {
   const words = s.trim().split(/\s+/).filter(Boolean)
@@ -261,11 +331,9 @@ function truncateAtWordBoundary(s: string, limit: number): string {
 }
 
 /**
- * Drop the sentence containing the first match of `re` from `s`. Other
- * sentences are preserved in order.
+ * Drop the sentence containing the first match of `re` from `s`.
  */
 function stripSentenceContaining(s: string, re: RegExp): string {
-  // Reset stateful `g` regex to avoid cross-call surprises.
   const localRe = new RegExp(re.source, re.flags)
   const sentences = s.match(/[^.!?]+[.!?]+\s*/g) ?? [s]
   const filtered = sentences.filter((sent) => {

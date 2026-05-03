@@ -93,10 +93,15 @@ export interface AggregatedResults {
 }
 
 // Shape of a generated AI report (stored in GeneratedReport.outputJson).
+//
+// executiveSummary is an ARRAY of correlation bullets (3–5 entries),
+// each ≤30 words. Changed from a single paragraph in prompt v2
+// (2026-05-03 alignment): bullets force the AI to surface relationships
+// between data points rather than narrate the obvious.
 export interface AiReportOutput {
-  executiveSummary: string
+  executiveSummary: string[]
   focusAreaActions: Array<{
     capability: CapabilityKey
-    actions: string[] // bullet items
+    actions: string[] // 2 items per capability, each ≤40 words
   }>
 }
