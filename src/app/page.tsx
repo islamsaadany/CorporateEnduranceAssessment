@@ -28,11 +28,6 @@ export default function LandingPage() {
           Admin login
         </Link>
       </div>
-
-      <footer className="pt-8 text-xs text-ink-subtle">
-        Phase 1 scaffold. UI design language pending — see{' '}
-        <code className="rounded bg-canvas-muted px-1 py-0.5">product-spec/12_design_language.md</code>.
-      </footer>
     </main>
   )
 }
