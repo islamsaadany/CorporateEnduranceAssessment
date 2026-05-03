@@ -11,8 +11,12 @@
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
 
-// --- Inputs (mirroring SEED_SUPER_ADMIN_* env vars in seed.ts) ---
-const SUPER_ADMIN_EMAIL = 'superadmin@forefront.example'
+// --- Inputs (mirroring ADMIN_USERNAME / ADMIN_PASSWORD env vars in seed.ts) ---
+// Username is stored in the Admin.email column (a generic unique identifier
+// — column name predates the rename and is left in place to avoid a schema
+// migration). The default placeholder below is a development-only seed; in
+// production the user sets ADMIN_USERNAME / ADMIN_PASSWORD in Vercel.
+const SUPER_ADMIN_EMAIL = 'admin'
 const SUPER_ADMIN_PASSWORD = 'change-me-on-first-login'
 const SUPER_ADMIN_NAME = 'Super Admin'
 

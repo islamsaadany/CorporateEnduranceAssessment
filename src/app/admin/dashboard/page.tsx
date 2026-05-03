@@ -12,8 +12,8 @@ export default async function DashboardPage() {
   // dashboard. See src/lib/auth.ts for the matching login path.
   const envCredsActive =
     user.role === 'super_admin' &&
-    Boolean(process.env.SEED_SUPER_ADMIN_EMAIL) &&
-    Boolean(process.env.SEED_SUPER_ADMIN_PASSWORD)
+    Boolean(process.env.ADMIN_USERNAME) &&
+    Boolean(process.env.ADMIN_PASSWORD)
 
   const [collecting, closed] = await Promise.all([
     prisma.assessment.findMany({
@@ -48,8 +48,8 @@ export default async function DashboardPage() {
           <p className="mt-1 text-amber-800">
             Anyone with edit access to this project&rsquo;s Vercel environment variables can read
             this password in plaintext. To revert to a database-backed password, remove{' '}
-            <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">SEED_SUPER_ADMIN_PASSWORD</code>{' '}
-            from Vercel and redeploy.
+            <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">ADMIN_PASSWORD</code> from
+            Vercel and redeploy.
           </p>
         </div>
       ) : null}

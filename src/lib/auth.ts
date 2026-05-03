@@ -6,7 +6,7 @@ import { prisma } from './prisma'
 import type { AdminRole } from '@prisma/client'
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  username: z.string().trim().min(1),
   password: z.string().min(1),
 })
 
@@ -16,34 +16,38 @@ export const authConfig = {
   providers: [
     Credentials({
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        username: { label: 'Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
       authorize: async (raw) => {
         const parsed = credentialsSchema.safeParse(raw)
         if (!parsed.success) return null
 
-        const email = parsed.data.email.toLowerCase()
+        // Username is stored in the Admin.email column (a generic unique
+        // identifier — the column predates the rename and is left in
+        // place to avoid an unnecessary schema migration). Lowercased
+        // for case-insensitive matching.
+        const username = parsed.data.username.toLowerCase()
         const password = parsed.data.password
 
         // Env-var super admin login (recovery path).
         //
-        // If SEED_SUPER_ADMIN_EMAIL + SEED_SUPER_ADMIN_PASSWORD are set in
-        // the environment and match the supplied credentials, log the user
-        // in as the super admin. The DB row is created/repaired on demand
-        // so that audit logs (actorAdminId) and assessment ownership keep
-        // working. The DB password hash for this row is not consulted on
-        // this code path — env-var match alone authenticates.
+        // If ADMIN_USERNAME + ADMIN_PASSWORD are set in the environment
+        // and match the supplied credentials, log the user in as the
+        // super admin. The DB row is created/repaired on demand so that
+        // audit logs (actorAdminId) and assessment ownership keep
+        // working. The DB password hash for this row is not consulted
+        // on this code path — env-var match alone authenticates.
         //
         // Security trade-off: the password lives in plaintext in the
         // Vercel env-var dashboard. This is acceptable per the user's
         // explicit decision (recovery loop > additional surface). The
-        // dashboard surfaces a persistent banner whenever this env var
-        // is set so the trade-off stays visible. See CLAUDE.md.
-        const envEmail = process.env.SEED_SUPER_ADMIN_EMAIL?.toLowerCase()
-        const envPassword = process.env.SEED_SUPER_ADMIN_PASSWORD
-        if (envEmail && envPassword && envEmail === email && envPassword === password) {
-          const existing = await prisma.admin.findUnique({ where: { email } })
+        // dashboard surfaces a persistent banner whenever these env vars
+        // are set so the trade-off stays visible. See CLAUDE.md.
+        const envUsername = process.env.ADMIN_USERNAME?.toLowerCase()
+        const envPassword = process.env.ADMIN_PASSWORD
+        if (envUsername && envPassword && envUsername === username && envPassword === password) {
+          const existing = await prisma.admin.findUnique({ where: { email: username } })
           if (existing) {
             // Repair: deactivated super admin row should still let env login through.
             const repaired =
@@ -65,8 +69,8 @@ export const authConfig = {
           // actually authenticates going forward.
           const created = await prisma.admin.create({
             data: {
-              email,
-              name: process.env.SEED_SUPER_ADMIN_NAME || 'Super Admin',
+              email: username,
+              name: 'Super Admin',
               passwordHash: await bcrypt.hash(password, 10),
               role: 'super_admin',
               isActive: true,
@@ -82,7 +86,7 @@ export const authConfig = {
 
         // Standard DB-backed login for everyone else (and for the super
         // admin when env vars are not set).
-        const admin = await prisma.admin.findUnique({ where: { email } })
+        const admin = await prisma.admin.findUnique({ where: { email: username } })
         if (!admin || !admin.isActive) return null
 
         const ok = await bcrypt.compare(password, admin.passwordHash)

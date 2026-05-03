@@ -1,6 +1,6 @@
 /**
  * Seeds the DB with:
- *   - One super admin (credentials from SEED_SUPER_ADMIN_* env vars)
+ *   - One super admin (credentials from ADMIN_USERNAME / ADMIN_PASSWORD env vars)
  *   - One Settings singleton (provider=gemini, no API key — bootstrap banner will show)
  *   - One sample assessment ("Acme Corp (sample)") with:
  *       · 1 cohort access code (everyone uses the same code)
@@ -57,16 +57,17 @@ async function uniqueCode() {
 }
 
 async function main() {
-  const email = process.env.SEED_SUPER_ADMIN_EMAIL || 'superadmin@forefront.example'
-  const password = process.env.SEED_SUPER_ADMIN_PASSWORD || 'change-me-on-first-login'
-  const name = process.env.SEED_SUPER_ADMIN_NAME || 'Super Admin'
+  // Username is stored in the Admin.email column (left in place rather
+  // than migrated; see src/lib/auth.ts for the rationale).
+  const username = (process.env.ADMIN_USERNAME || 'admin').toLowerCase()
+  const password = process.env.ADMIN_PASSWORD || 'change-me-on-first-login'
 
   console.log('▶ Seeding super admin…')
   const passwordHash = await bcrypt.hash(password, 10)
   const superAdmin = await prisma.admin.upsert({
-    where: { email },
-    update: { role: AdminRole.super_admin, isActive: true, name, passwordHash },
-    create: { email, name, passwordHash, role: AdminRole.super_admin, isActive: true },
+    where: { email: username },
+    update: { role: AdminRole.super_admin, isActive: true, name: 'Super Admin', passwordHash },
+    create: { email: username, name: 'Super Admin', passwordHash, role: AdminRole.super_admin, isActive: true },
   })
   console.log(`   ✓ super admin: ${superAdmin.email}`)
 
@@ -153,10 +154,10 @@ async function main() {
   }
 
   console.log('\nDone. Sample super-admin login:')
-  console.log(`  email:    ${email}`)
+  console.log(`  username: ${username}`)
   console.log(`  password: ${password}`)
   console.log(`\nSample cohort access code (share with respondents): ${cohortCode}`)
-  console.log('\nReminder: change SEED_SUPER_ADMIN_PASSWORD before running in any shared environment.\n')
+  console.log('\nReminder: change ADMIN_PASSWORD before running in any shared environment.\n')
 }
 
 main()
