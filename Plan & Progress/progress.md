@@ -130,6 +130,7 @@ What's built and live on Vercel:
   - [x] `/admin/settings/ai` page — super-admin-gated. Provider dropdown, masked API key input per selected provider, "Saved key ending in ••••XXXX" line with source pill (Saved / Env fallback / Not configured), bootstrap banner when active provider's key comes from env. Test connection + Save buttons. "Last updated by {name} on {date}" footer.
   - [x] Layout nav: pre-existing super-admin "AI settings" link (added in Phase 2) now resolves; no layout change needed.
   - [x] Type-check + production build green; new routes `/admin/settings/ai`, `/api/settings/ai`, `/api/settings/ai/test` registered.
+  - [x] **Verified live (happy path 2026-05-03):** super admin pasted a real API key → "Test connection" returned green → Save persisted the encrypted key → page refreshed with "Saved" pill + last-4 chars. Remaining manual checks **deferred** to slice 7.5 (see § 6 "Deferred manual tests" below) so we can keep momentum on 7.2.
   - [x] **Slice 7.2 will refactor the inline provider HTTP calls into the abstraction at `src/lib/ai/`.**
 - [ ] **7.2** — Provider abstraction + prompt builder
   - [ ] `src/lib/ai/index.ts` (`selectProvider`, `generateReport`, `testConnection`)
@@ -253,6 +254,27 @@ The build sequence in `execution-plan.md` lists Phase 7 as the AI-generated narr
 - **Names must be stripped from the LLM input** — see spec 11 § 5 and the comment on `RespondentRow.name` in `src/lib/results-service.ts`. The current API surface returns names; the AI prompt builder is responsible for stripping them.
 - **Cache key alignment** — `filterSignature(filter)` from `src/lib/filters.ts` is already the agreed key. Don't invent a new signature scheme; reuse the function.
 - **Bump `Settings.promptVersion`** when changing the prompt builder. Cached reports older than the new version should be treated as cache misses (do not silently invalidate without the user's say-so per `CLAUDE.md` "After Making Changes to AI Prompts").
+
+---
+
+---
+
+## 6. Deferred manual tests
+
+Things we explicitly chose to defer rather than block a slice on. Each one is tractable in a few minutes once we want to come back to it. **Re-run after the deferred work to confirm nothing regressed.**
+
+### 6.1 — Slice 7.1 verification (deferred 2026-05-03)
+The happy path was verified live (paste key → Test → green → Save → "Saved" pill with last-4 chars). The rest of the verification matrix is parked here:
+
+- [ ] **Empty-state screen** — visit `/admin/settings/ai` with no `ADMIN_API_KEY*` env vars set and no DB key saved: every provider should show the grey "Not configured" pill with body text *"No key configured yet for {Provider}"*.
+- [ ] **Env-var bootstrap path** — set one of `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in Vercel without saving via the UI: that provider should show the yellow "Env fallback" pill with body line *"Bootstrap key from env var ending in ••••XXXX (GEMINI_API_KEY)"*, and the persistent amber bootstrap banner should appear at the top of the page.
+- [ ] **Save flips bootstrap → DB** — with bootstrap active, paste a key into the field and Save: pill should flip from yellow "Env fallback" to green "Saved" and the bootstrap banner should disappear after refresh.
+- [ ] **Test with empty input + saved key** — after saving, click Test with the field empty: should return *"✓ Connected with saved key."*
+- [ ] **Wrong key error** — paste a deliberately invalid key, click Test: should show a red message like *"Authentication failed — the API key was rejected."* (or similar 401/403 humanised error).
+- [ ] **Save still works after a failed test** — Test is informational, not a gate; Save should succeed even if the previous Test failed.
+- [ ] **Provider switch preserves other keys** — save Gemini key, switch dropdown to Claude, save a Claude key, switch back to Gemini: the Gemini key should still be there (independent columns).
+- [ ] **Permission gating** — log out and visit `/admin/settings/ai` directly: should bounce to login. (If a non-super admin exists) regular admin visiting the URL should be redirected to `/admin/dashboard`.
+- [ ] **Audit trail** — after a save, an `ai.config_change` row exists in `AuditLog` with metadata `{ providerChanged, keyChangedFor }` and **never** a key value or its tail. Verify in Neon SQL editor: `SELECT * FROM "AuditLog" WHERE action='ai.config_change' ORDER BY "createdAt" DESC LIMIT 5;`
 
 ---
 
