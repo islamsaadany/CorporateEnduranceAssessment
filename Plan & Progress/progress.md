@@ -132,12 +132,19 @@ What's built and live on Vercel:
   - [x] Type-check + production build green; new routes `/admin/settings/ai`, `/api/settings/ai`, `/api/settings/ai/test` registered.
   - [x] **Verified live (happy path 2026-05-03):** super admin pasted a real API key → "Test connection" returned green → Save persisted the encrypted key → page refreshed with "Saved" pill + last-4 chars. Remaining manual checks **deferred** to slice 7.5 (see § 6 "Deferred manual tests" below) so we can keep momentum on 7.2.
   - [x] **Slice 7.2 will refactor the inline provider HTTP calls into the abstraction at `src/lib/ai/`.**
-- [ ] **7.2** — Provider abstraction + prompt builder
-  - [ ] `src/lib/ai/index.ts` (`selectProvider`, `generateReport`, `testConnection`)
-  - [ ] `src/lib/ai/prompt.ts` — provider-neutral system + user prompt builder per spec 14; **strips names** before any LLM call (spec 11 § 5)
-  - [ ] `src/lib/ai/{gemini,claude,openai}.ts` per-provider SDK adapters
-  - [ ] `src/lib/ai/cache.ts` — read/write `GeneratedReport` keyed by `(assessmentId, filterSignature)`
-  - [ ] Refactor `/api/settings/ai/test` to use the abstraction
+- [x] **7.2** — Provider abstraction + prompt builder
+  - [x] `src/lib/ai/types.ts` — `Provider`, `GenerateReportInput`, `RespondentForPrompt`, Zod `aiResponseSchema`, `ProviderAdapter` contract.
+  - [x] `src/lib/ai/strip-names.ts` — single chokepoint that converts `RespondentForPrompt[]` (with names) into `AnonymizedRespondent[]` (letter-labeled, no `name` field). Imported by `prompt.ts` only.
+  - [x] `src/lib/ai/prompt.ts` — `buildPrompt(input)` returns `{ system, user, expectedActionItemKeys, anonymizedRespondents }`. System prompt is spec-14 § 2 verbatim; user prompt formats team scores, focus areas with baseline action items from `BASELINE_ACTION_ITEMS`, and letter-labeled individuals.
+  - [x] `src/lib/ai/{gemini,claude,openai}.ts` — per-provider adapters using official SDKs (`@google/genai`, `@anthropic-ai/sdk`, `openai`). JSON mode where supported (Gemini `responseMimeType: 'application/json'`, OpenAI `response_format: { type: 'json_object' }`, Claude relies on prompt + post-parse). Hardcoded models per spec 14 § 8 (`gemini-2.5-flash`, `claude-haiku-4-5`, `gpt-4.1-mini`). Each exposes `generate()` + `testConnection()` + `modelName`.
+  - [x] `src/lib/ai/cache.ts` — `readCachedReport` / `writeCachedReport` (upsert) / `invalidateCachesForAssessment` (placeholder for Phase 9).
+  - [x] `src/lib/ai/index.ts` — orchestration. `resolveActiveProvider()` (DB → env fallback), `testConnection(provider, suppliedApiKey?)` with `supplied → db → env` priority, `generateReport(input)` end-to-end resolve → build prompt → provider call → JSON.parse → Zod schema validation → map LLM action_items (keyed by capability labels) back to `CapabilityKey`-keyed `AiReportOutput`. Typed errors `AiConfigError` (`no_key_configured`/`decryption_failed`) and `AiGenerationError` (`provider_call_failed`/`json_parse_failed`/`schema_mismatch`).
+  - [x] **Q4/A**: `inputSnapshot` stored in cache contains the *stripped* (letter-labeled) respondent payload, never the pre-strip.
+  - [x] **Q3/A**: cache writes happen in slice 7.3's endpoint — `generateReport()` is pure (input → output).
+  - [x] Refactored `/api/settings/ai/test/route.ts` to call `testConnection()` from the abstraction. External response shape unchanged from slice 7.1.
+  - [x] Added 3 SDK dependencies to `package.json`.
+  - [x] Type-check + production build green (28 routes; no new routes).
+  - [x] **Verified live (2026-05-03):** super admin clicked Test on saved Gemini key → green "Connected with saved key", confirming the abstraction is correctly resolving the DB-saved encrypted key through `gemini.ts`.
 - [ ] **7.3** — Report generation endpoint + UI button
   - [ ] `POST /api/assessments/[id]/report?<filter>` — generate (draft if collecting, final if closed); writes to `GeneratedReport` cache
   - [ ] `GET /api/assessments/[id]/report?<filter>` — fetch cached
