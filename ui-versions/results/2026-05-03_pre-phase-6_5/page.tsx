@@ -21,7 +21,6 @@ import { PreliminaryBanner } from './banners'
 import { FilterControls } from './filter-controls'
 import { LockCard } from './lock-card'
 import { SummarySection } from './summary-section'
-import { WhoRespondedSection } from './who-responded-section'
 import { CapabilityProfileSection } from './capability-profile-section'
 import { FocusAreasSection } from './focus-areas-section'
 import { IndividualResponsesSection } from './individual-responses-section'
@@ -142,7 +141,6 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
             noFocusAreas={noFocusAreas}
           />
           <SummarySection aggregates={aggregates} />
-          <WhoRespondedSection allSubmittedDemos={bundle.allSubmittedDemos} />
           <CapabilityProfileSection aggregates={aggregates} />
           <FocusAreasSection
             aggregates={aggregates}
