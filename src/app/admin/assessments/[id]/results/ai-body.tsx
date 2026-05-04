@@ -37,6 +37,7 @@ interface FallbackResult {
   reason: string
   attempts: number
   attemptReasons: string[]
+  attemptDetails?: string[]
   isDraft: boolean
 }
 
@@ -301,8 +302,20 @@ function FallbackCard({
       </p>
       {fallback.attemptReasons && fallback.attemptReasons.length > 0 ? (
         <div className="mt-2 rounded border border-amber-200 bg-white/40 px-2 py-1.5 font-mono text-[10px] text-amber-900">
-          <span className="font-bold uppercase tracking-[1px]">Why:</span>{' '}
-          {fallback.attemptReasons.map((r, i) => `Attempt ${i + 1}: ${r}`).join(' · ')}
+          <p className="font-bold uppercase tracking-[1px]">Why:</p>
+          <ul className="mt-1 space-y-1">
+            {fallback.attemptReasons.map((r, i) => {
+              const detail = fallback.attemptDetails?.[i]
+              return (
+                <li key={i} className="break-words">
+                  <span className="font-bold">Attempt {i + 1}:</span> {r}
+                  {detail && detail !== r ? (
+                    <span className="block pl-4 italic opacity-80">{detail}</span>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
         </div>
       ) : null}
       <button

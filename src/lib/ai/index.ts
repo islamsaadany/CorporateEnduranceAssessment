@@ -210,6 +210,10 @@ export type GenerateReportOutcome =
       attempts: number
       reason: string
       attemptReasons: string[]
+      // Parallel array to attemptReasons. Carries the long-form detail
+      // for each attempt — including a preview of the raw response when
+      // json_parse_failed, so we can debug without checking the audit log.
+      attemptDetails: string[]
     }
 
 /**
@@ -241,6 +245,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
       attempts: 0,
       reason: 'ai_unavailable',
       attemptReasons: [reason],
+      attemptDetails: [reason],
     }
   }
 
@@ -315,6 +320,10 @@ export async function generateReport(input: GenerateReportInput): Promise<Genera
     attempts: 2,
     reason: 'validation_failed_after_retry',
     attemptReasons: [a1.reason, a2.reason],
+    attemptDetails: [
+      a1.ok ? '' : a1.detail,
+      a2.ok ? '' : a2.detail,
+    ],
   }
 }
 
@@ -347,14 +356,17 @@ async function callAndValidate(input: CallAndValidateInput): Promise<CallAndVali
     }
   }
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stripMarkdownFences(raw))
-  } catch {
+  // Try parse strategies progressively. Each strategy is more aggressive
+  // than the previous; the first one that yields a valid object wins.
+  // If they all fail, surface a preview of what the model actually
+  // emitted so the fallback card can show it (debug aid).
+  const parsed = tryParseJsonProgressive(raw)
+  if (parsed === null) {
+    const preview = raw.slice(0, 400).replace(/\s+/g, ' ').trim()
     return {
       ok: false,
       reason: 'json_parse_failed',
-      detail: 'Provider returned non-JSON content.',
+      detail: `Provider returned non-JSON content. Preview: ${preview || '(empty)'}`,
     }
   }
 
@@ -389,43 +401,59 @@ function snapshot(input: GenerateReportInput, prompt: ReturnType<typeof buildPro
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 /**
- * Robust extractor for the JSON payload an LLM returned. Handles:
- *   - markdown code fences (```json ... ```)
- *   - // line comments (Gemini occasionally emits these despite JSON mode,
- *     especially when the prompt's schema example includes them)
- *   - trailing commas before } or ]
- *   - leading or trailing prose around the actual JSON object
+ * Try to parse the raw LLM response as JSON, applying progressively
+ * more aggressive recovery strategies until something parses. Returns
+ * the parsed object, or null if every strategy fails.
  *
- * The strategy: progressively strip / normalize, then locate the
- * outermost `{ ... }` substring. If after all that the result still
- * doesn't parse, the caller (callAndValidate) emits json_parse_failed
- * and the orchestrator retries.
+ * Real-world failures we've hit (in order of frequency):
+ *   1. ```json ... ``` markdown fences
+ *   2. // line comments mirroring the prompt's schema example
+ *   3. Leading prose ("Sure, here is the JSON: ...")
+ *   4. Trailing prose ("Let me know if you need anything else.")
+ *   5. Trailing commas before } or ]
+ *
+ * Each strategy adds one more transformation on top of the previous.
  */
-function stripMarkdownFences(raw: string): string {
-  let s = raw.trim()
+function tryParseJsonProgressive(raw: string): unknown | null {
+  const candidates: string[] = []
 
-  // 1. Unwrap a single fence pair (with optional language tag).
-  const fenceMatch = /^```[a-zA-Z0-9]*\s*\n?([\s\S]*?)\n?```\s*$/m.exec(s)
-  if (fenceMatch) s = fenceMatch[1].trim()
+  // Strategy 0: parse as-is.
+  candidates.push(raw)
 
-  // 2. Strip // line comments. JSON forbids these but Gemini sometimes
-  //    emits them inline (mirroring schema-example comments in prompts).
-  //    Conservative: only strip when // starts a line or follows whitespace,
-  //    so we don't damage URLs like "https://...".
-  s = s.replace(/(^|\s)\/\/[^\n]*/g, '$1')
+  // Strategy 1: trim only.
+  candidates.push(raw.trim())
 
-  // 3. Locate the outermost JSON object — robust to leading/trailing prose
-  //    ("Sure, here is the JSON:\n{...}\n\nLet me know if you need anything else.").
-  const firstBrace = s.indexOf('{')
-  const lastBrace = s.lastIndexOf('}')
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    s = s.slice(firstBrace, lastBrace + 1)
+  // Strategy 2: strip a single markdown fence pair (common Gemini quirk).
+  const fenceMatch = /^```[a-zA-Z0-9]*\s*\n?([\s\S]*?)\n?```\s*$/m.exec(raw.trim())
+  if (fenceMatch) candidates.push(fenceMatch[1].trim())
+
+  // Strategy 3: also strip // line comments.
+  const lastSoFar = candidates[candidates.length - 1]
+  candidates.push(lastSoFar.replace(/(^|\s)\/\/[^\n]*/g, '$1'))
+
+  // Strategy 4: slice between outermost { } to drop leading/trailing prose.
+  const sliced = sliceOutermostObject(candidates[candidates.length - 1])
+  if (sliced) candidates.push(sliced)
+
+  // Strategy 5: strip trailing commas before } or ].
+  candidates.push(candidates[candidates.length - 1].replace(/,(\s*[}\]])/g, '$1'))
+
+  for (const c of candidates) {
+    if (!c) continue
+    try {
+      return JSON.parse(c)
+    } catch {
+      // try next
+    }
   }
+  return null
+}
 
-  // 4. Strip trailing commas before } or ] (a common LLM mistake).
-  s = s.replace(/,(\s*[}\]])/g, '$1')
-
-  return s.trim()
+function sliceOutermostObject(s: string): string | null {
+  const first = s.indexOf('{')
+  const last = s.lastIndexOf('}')
+  if (first < 0 || last <= first) return null
+  return s.slice(first, last + 1)
 }
 
 // ─── Errors ──────────────────────────────────────────────────────────────

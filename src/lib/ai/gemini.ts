@@ -28,7 +28,11 @@ async function generate(input: { system: string; user: string; apiKey: string })
         // Spec 14 § 3 (prompt v2): 0.5 trades a little structural
         // consistency for more lift in correlation phrasing.
         temperature: 0.5,
-        maxOutputTokens: 2000,
+        // Bumped from 2000 → 4000 (2026-05-03) because gemini-2.5-flash's
+        // thinking budget can eat into the output cap, occasionally
+        // truncating the JSON payload. 4000 is generous headroom for a
+        // ~1000-token output.
+        maxOutputTokens: 4000,
         responseMimeType: 'application/json',
         abortSignal: controller.signal,
       },
