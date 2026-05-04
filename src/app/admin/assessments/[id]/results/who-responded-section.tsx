@@ -159,22 +159,42 @@ function PieCard({ title, slices, total }: { title: string; slices: Slice[]; tot
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="mt-2 space-y-1 text-xs">
-        {slices.map((s, i) => (
-          <li key={s.name} className="flex items-center justify-between gap-3">
-            <span className="flex min-w-0 items-center gap-2 text-brand-dark-blue">
-              <span
-                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: PIE_PALETTE[i % PIE_PALETTE.length] }}
-              />
-              <span className="truncate">{s.name}</span>
-            </span>
-            <span className="shrink-0 tabular-nums text-brand-grey-text">
-              {s.value} · {Math.round((s.value / total) * 100)}%
-            </span>
-          </li>
-        ))}
-      </ul>
+      <table className="mt-3 w-full border-collapse text-xs">
+        <thead>
+          <tr className="border-b border-brand-grey-light">
+            <th className="border-r border-brand-grey-light py-1 pl-1 pr-2 text-left text-[10px] font-bold uppercase tracking-[1.5px] text-brand-grey-text">
+              Item
+            </th>
+            <th className="border-r border-brand-grey-light px-2 py-1 text-right text-[10px] font-bold uppercase tracking-[1.5px] text-brand-grey-text">
+              #
+            </th>
+            <th className="px-2 py-1 text-right text-[10px] font-bold uppercase tracking-[1.5px] text-brand-grey-text">
+              %
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {slices.map((s, i) => (
+            <tr key={s.name} className="border-b border-brand-grey-light last:border-b-0">
+              <td className="border-r border-brand-grey-light py-1.5 pl-1 pr-2 text-brand-dark-blue">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style={{ backgroundColor: PIE_PALETTE[i % PIE_PALETTE.length] }}
+                  />
+                  <span className="truncate">{s.name}</span>
+                </span>
+              </td>
+              <td className="border-r border-brand-grey-light px-2 py-1.5 text-right tabular-nums text-brand-grey-text">
+                {s.value}
+              </td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-brand-grey-text">
+                {Math.round((s.value / total) * 100)}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
