@@ -389,16 +389,43 @@ function snapshot(input: GenerateReportInput, prompt: ReturnType<typeof buildPro
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 /**
- * Gemini (and occasionally Claude) sometimes wraps JSON output in
- * ```json ... ``` despite explicit JSON-mode requests. Strip a single
- * leading/trailing fence pair if present; leave un-fenced content alone.
+ * Robust extractor for the JSON payload an LLM returned. Handles:
+ *   - markdown code fences (```json ... ```)
+ *   - // line comments (Gemini occasionally emits these despite JSON mode,
+ *     especially when the prompt's schema example includes them)
+ *   - trailing commas before } or ]
+ *   - leading or trailing prose around the actual JSON object
+ *
+ * The strategy: progressively strip / normalize, then locate the
+ * outermost `{ ... }` substring. If after all that the result still
+ * doesn't parse, the caller (callAndValidate) emits json_parse_failed
+ * and the orchestrator retries.
  */
 function stripMarkdownFences(raw: string): string {
-  const trimmed = raw.trim()
-  // Match ```<lang>?\n ... \n``` (lang optional, e.g. "json").
-  const match = /^```[a-zA-Z0-9]*\s*\n?([\s\S]*?)\n?```$/m.exec(trimmed)
-  if (match) return match[1].trim()
-  return trimmed
+  let s = raw.trim()
+
+  // 1. Unwrap a single fence pair (with optional language tag).
+  const fenceMatch = /^```[a-zA-Z0-9]*\s*\n?([\s\S]*?)\n?```\s*$/m.exec(s)
+  if (fenceMatch) s = fenceMatch[1].trim()
+
+  // 2. Strip // line comments. JSON forbids these but Gemini sometimes
+  //    emits them inline (mirroring schema-example comments in prompts).
+  //    Conservative: only strip when // starts a line or follows whitespace,
+  //    so we don't damage URLs like "https://...".
+  s = s.replace(/(^|\s)\/\/[^\n]*/g, '$1')
+
+  // 3. Locate the outermost JSON object — robust to leading/trailing prose
+  //    ("Sure, here is the JSON:\n{...}\n\nLet me know if you need anything else.").
+  const firstBrace = s.indexOf('{')
+  const lastBrace = s.lastIndexOf('}')
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    s = s.slice(firstBrace, lastBrace + 1)
+  }
+
+  // 4. Strip trailing commas before } or ] (a common LLM mistake).
+  s = s.replace(/,(\s*[}\]])/g, '$1')
+
+  return s.trim()
 }
 
 // ─── Errors ──────────────────────────────────────────────────────────────

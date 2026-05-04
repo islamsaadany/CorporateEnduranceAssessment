@@ -188,30 +188,43 @@ function formatUserPrompt(input: GenerateReportInput, anon: AnonymizedRespondent
   }
   lines.push('')
 
-  lines.push('OUTPUT JSON SCHEMA (return exactly this shape, valid JSON, no markdown fence):')
+  lines.push('OUTPUT JSON SCHEMA (return exactly this shape, valid JSON, no markdown fence, no comments, no trailing commas):')
+  lines.push('')
+  lines.push('Schema notes (read these BEFORE generating, do not include them in your output):')
+  lines.push('- "executive_summary" is an array of 3 to 5 strings. Each string must be a correlation between two or more data points (≤30 words). Do NOT emit a bullet that just states one capability\'s band.')
+  if (aggregates.focusAreas.length === 0) {
+    lines.push('- "action_items" must be an empty object {} because no focus areas were identified.')
+  } else {
+    lines.push('- "action_items" must have exactly these 5 keys (capability labels), spelled exactly as shown:')
+    for (const capKey of aggregates.focusAreas) {
+      lines.push(`    "${CAPABILITY_LABELS[capKey]}"`)
+    }
+    lines.push('- Each value is an array of exactly 2 strings (≤40 words each). Each action item should reference a data signal where natural (spread, demographic pattern, filter context, or a named capability tension).')
+  }
+  lines.push('')
+  lines.push('Shape:')
   lines.push('{')
   lines.push('  "executive_summary": [')
-  lines.push('    "Correlation bullet 1, ≤30 words, names a relationship between data points.",')
-  lines.push('    "Correlation bullet 2, ≤30 words, names a relationship between data points.",')
-  lines.push('    "Correlation bullet 3, ≤30 words, names a relationship between data points."')
-  lines.push('    // 3 to 5 entries total. Each must be a relationship, not a single-capability statement.')
+  lines.push('    "First correlation bullet here.",')
+  lines.push('    "Second correlation bullet here.",')
+  lines.push('    "Third correlation bullet here."')
   lines.push('  ],')
   lines.push('  "action_items": {')
   if (aggregates.focusAreas.length === 0) {
-    lines.push('    // No focus areas → return an empty object {}.')
+    // empty object — schema notes above already explain this
   } else {
     aggregates.focusAreas.forEach((capKey, i) => {
       const trail = i < aggregates.focusAreas.length - 1 ? ',' : ''
       lines.push(`    "${CAPABILITY_LABELS[capKey]}": [`)
-      lines.push(`      "Action 1 ≤40 words, MUST cite a data signal (spread, demographic pattern, filter context, or named capability tension).",`)
-      lines.push(`      "Action 2 ≤40 words, MUST cite a data signal (spread, demographic pattern, filter context, or named capability tension)."`)
+      lines.push(`      "First action item for ${CAPABILITY_LABELS[capKey]}.",`)
+      lines.push(`      "Second action item for ${CAPABILITY_LABELS[capKey]}."`)
       lines.push(`    ]${trail}`)
     })
   }
   lines.push('  }')
   lines.push('}')
   lines.push('')
-  lines.push('Generate the JSON now.')
+  lines.push('Return ONLY the JSON object. Do not wrap it in code fences. Do not add prose before or after. Do not include // comments inside the JSON.')
 
   return lines.join('\n')
 }
