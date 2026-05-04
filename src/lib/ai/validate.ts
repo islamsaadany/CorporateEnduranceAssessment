@@ -20,12 +20,7 @@
  *     a named capability label)
  */
 
-import {
-  CAPABILITY_LABELS,
-  CAPABILITY_ORDER,
-  LEVEL_LABELS,
-  TENURE_LABELS,
-} from '@/data/constants'
+import { CAPABILITY_LABELS } from '@/data/constants'
 import type { AiReportOutput, CapabilityKey } from '@/data/types'
 
 export type SoftFix =
@@ -42,7 +37,6 @@ export type HardFailReason =
   | 'wrong_action_count'
   | 'first_person_address'
   | 'multiple_numeric_references'
-  | 'missing_signal_citation'
 
 export type ValidationOutcome =
   | { ok: true; output: AiReportOutput; softFixes: SoftFix[] }
@@ -61,66 +55,42 @@ interface RawAi {
 }
 
 /**
- * Lazy-built keyword lookup for the signal-citation rule. Includes:
- *   - "spread", "split", "diverge", "disagree", "range", "spans"  (spread)
- *   - all 4 LEVEL labels' lowercase tokens (e.g. "manager", "leader")
- *   - all 5 TENURE labels' canonical tokens (e.g. "1–3", "4–7", "<1")
- *   - all 15 CAPABILITY labels (e.g. "Decision Velocity")
- *   - "this segment", "for this", "this filter"  (filter context)
- *   - per-call: the actual department names appearing in the input
+ * Run the full pipeline.
  *
- * The check is a substring search after lowercasing both sides — false
- * positives are tolerated; the goal is to catch action items that fail
- * to mention ANY data signal at all.
- */
-function buildSignalKeywords(extraDepartments: string[]): string[] {
-  const keywords: string[] = []
-  // Spread signals
-  keywords.push('spread', 'split', 'diverge', 'disagre', 'range', 'spans', 'team is split')
-  // Demographic level keywords (split each label on slashes; lowercase parts)
-  for (const lbl of Object.values(LEVEL_LABELS)) {
-    for (const part of lbl.split('/')) keywords.push(part.trim().toLowerCase())
-  }
-  // Tenure tokens
-  for (const lbl of Object.values(TENURE_LABELS)) {
-    keywords.push(lbl.toLowerCase())
-  }
-  keywords.push('tenure', 'senior', 'junior', 'early-career', 'years')
-  // Capability labels (any name-drop counts as a tension citation)
-  for (const lbl of Object.values(CAPABILITY_LABELS)) {
-    keywords.push(lbl.toLowerCase())
-  }
-  // Filter context phrases
-  keywords.push('this segment', 'for this', 'this filter', 'across this group', 'in this view')
-  // Departments seen in this run
-  for (const d of extraDepartments) keywords.push(d.toLowerCase())
-  return keywords
-}
-
-function citesSignal(text: string, keywords: string[]): boolean {
-  const lower = text.toLowerCase()
-  return keywords.some((k) => k.length > 0 && lower.includes(k))
-}
-
-/**
- * Run the full pipeline. The third arg is the list of department names
- * that appeared in the prompt input — they're admin-defined so we can't
- * hardcode them, but we want them as valid signal citations.
+ * Note: the `departmentNamesInPrompt` arg is kept on the signature for
+ * forward-compat with callers, but is no longer consulted. The
+ * signal-citation hard-fail rule was dropped 2026-05-03 (over-strict
+ * keyword matching was rejecting valid AI output and forcing fallback).
+ * The system prompt still asks for citations; we trust the prompt now.
  */
 export function validate(
   raw: RawAi,
   focusAreas: CapabilityKey[],
-  departmentNamesInPrompt: string[],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _departmentNamesInPrompt: string[] = [],
 ): ValidationOutcome {
   const softFixes: SoftFix[] = []
-  const signalKeywords = buildSignalKeywords(departmentNamesInPrompt)
 
-  // ── Hard checks on action_items keys ────────────────────────────────
+  // ── Tolerate label whitespace + case in action_items keys ───────────
+  // Gemini sometimes emits "Decision Velocity " with a trailing space or
+  // "decision velocity" lowercase — accept these as the canonical label.
   const expectedLabels = focusAreas.map((c) => CAPABILITY_LABELS[c])
-  const expectedSet = new Set(expectedLabels)
-  const actualKeys = Object.keys(raw.action_items)
+  const normalize = (s: string) => s.trim().toLowerCase()
+  const normalizedToCanonical: Record<string, string> = {}
+  for (const lbl of expectedLabels) normalizedToCanonical[normalize(lbl)] = lbl
 
-  const missing = expectedLabels.filter((k) => !(k in raw.action_items))
+  const normalizedActionItems: Record<string, string[]> = {}
+  const extraOriginals: string[] = []
+  for (const [k, v] of Object.entries(raw.action_items)) {
+    const canonical = normalizedToCanonical[normalize(k)]
+    if (canonical) {
+      normalizedActionItems[canonical] = v
+    } else {
+      extraOriginals.push(k)
+    }
+  }
+
+  const missing = expectedLabels.filter((k) => !(k in normalizedActionItems))
   if (missing.length > 0) {
     return {
       ok: false,
@@ -129,18 +99,17 @@ export function validate(
     }
   }
 
-  const extras = actualKeys.filter((k) => !expectedSet.has(k))
-  if (extras.length > 0) {
+  if (extraOriginals.length > 0) {
     return {
       ok: false,
       reason: 'extra_action_keys',
-      detail: `Unexpected keys in action_items: ${extras.join(', ')}. Expected exactly: ${expectedLabels.join(', ')}.`,
+      detail: `Unexpected keys in action_items: ${extraOriginals.join(', ')}. Expected exactly: ${expectedLabels.join(', ')}.`,
     }
   }
 
   // ── Each capability key has exactly 2 strings ────────────────────────
   for (const label of expectedLabels) {
-    const items = raw.action_items[label]
+    const items = normalizedActionItems[label]
     if (!Array.isArray(items) || items.length !== 2) {
       return {
         ok: false,
@@ -157,6 +126,9 @@ export function validate(
     }
   }
 
+  // From here on, work against `normalizedActionItems`, not raw.action_items.
+  const rawActions = normalizedActionItems
+
   // ── Soft fix: em dashes in summary bullets + actions ────────────────
   let summaryBullets = raw.executive_summary.map((b) => b)
   let summaryHadEmDash = false
@@ -168,7 +140,7 @@ export function validate(
   const actions: Record<string, [string, string]> = {}
   let anyActionEmDash = false
   for (const label of expectedLabels) {
-    const [a, b] = raw.action_items[label]
+    const [a, b] = rawActions[label]
     const aHad = a.includes('—')
     const bHad = b.includes('—')
     actions[label] = [a.replaceAll('—', '. '), b.replaceAll('—', '. ')]
@@ -271,21 +243,10 @@ export function validate(
     }
   }
 
-  // ── HARD: every action item must cite at least one data signal.
-  // Skipped when the prompt did not surface enough data to cite (defensive).
-  if (signalKeywords.length > 0) {
-    for (const label of expectedLabels) {
-      for (const item of actions[label]) {
-        if (!citesSignal(item, signalKeywords)) {
-          return {
-            ok: false,
-            reason: 'missing_signal_citation',
-            detail: `Action item under "${label}" does not cite any data signal. Each action item must reference a spread signal (e.g., "split"), a demographic pattern (e.g., "managers"), the filter context, or a named capability tension. Item was: "${item}"`,
-          }
-        }
-      }
-    }
-  }
+  // Note: the signal-citation hard fail (require each action item to
+  // include a spread/demographic/filter/capability keyword) was dropped
+  // 2026-05-03 — over-strict matching was forcing fallback on otherwise-
+  // good output. The system prompt still asks for citations.
 
   // ── Word-count truncation (soft fixes) ───────────────────────────────
   let truncatedAnyBullet = false

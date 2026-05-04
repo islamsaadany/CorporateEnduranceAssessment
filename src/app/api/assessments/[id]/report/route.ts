@@ -196,6 +196,11 @@ export async function POST(req: Request, { params }: Ctx) {
       provider: outcome.provider,
       reason: outcome.reason,
       attempts: outcome.attempts,
+      // Per-attempt rejection reasons (validator code names like
+      // "first_person_address", "json_parse_failed", etc). Surfaced to
+      // the UI so the admin can see WHY the fallback was used without
+      // checking the audit log.
+      attemptReasons: outcome.attemptReasons,
       isDraft,
     },
   })
