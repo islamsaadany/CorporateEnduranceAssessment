@@ -12,7 +12,7 @@ import { GoogleGenAI } from '@google/genai'
 import type { ProviderAdapter, TestConnectionResult } from './types'
 
 const MODEL_NAME = 'gemini-2.5-flash'
-const REQUEST_TIMEOUT_MS = 30_000
+const REQUEST_TIMEOUT_MS = 60_000
 const TEST_TIMEOUT_MS = 8_000
 
 async function generate(input: { system: string; user: string; apiKey: string }): Promise<string> {
@@ -33,6 +33,12 @@ async function generate(input: { system: string; user: string; apiKey: string })
         // truncating the JSON payload. 4000 is generous headroom for a
         // ~1000-token output.
         maxOutputTokens: 4000,
+        // Disable extended thinking for this call (2026-05-03). We're
+        // generating short structured JSON, not solving a multi-step
+        // problem — thinking adds latency, eats output tokens, and was
+        // observed truncating the JSON mid-word. thinkingBudget: 0
+        // tells gemini-2.5-flash to skip the thinking phase entirely.
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
         abortSignal: controller.signal,
       },
