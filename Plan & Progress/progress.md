@@ -3,7 +3,7 @@
 > Live tracker of build progress, recent changes, and active blockers.
 > Update this file in real-time as work moves through phases defined in `execution-plan.md`.
 
-**Current phase:** Phase 7.1 complete · slices 7.2–7.4 next
+**Current phase:** Phase 7 complete · Phase 6.5 (report polish) next
 **Last updated:** 2026-05-03
 **Maintained by:** Whoever is actively working on the project (human or Claude Code session)
 
@@ -151,10 +151,23 @@ What's built and live on Vercel:
   - [ ] "Generate AI report" button on results-page header
   - [ ] Executive summary panel + AI-adapted action items rendered into the existing Focus Areas section
   - [ ] Draft watermark when `assessment.status === 'collecting'`
-- [ ] **7.4** — Validation + retries + audit
-  - [ ] Spec 14 § 4 validators (JSON shape, ≤120 words, exactly 5 keys × 2 items, no numerics regex, no first-person, no em dashes, no emoji)
-  - [ ] One retry on hard fails; baseline fallback if both attempts fail (not cached per spec 14 § 5)
-  - [ ] Audit entries: `ai.generate`, `ai_generation_failed`, `ai_fallback_used`
+- [x] **7.4** — Validators + retry + fallback
+  - [x] `src/lib/ai/validate.ts` — spec 14 § 4 rules. Hard fails (shape mismatch, missing focus-area keys, wrong action count, first-person address, multiple numeric refs) trigger one retry with augmented prompt. Soft fixes (truncation, em-dash → period, emoji/exclamation strip, single-numeric sentence strip) applied in place + reported via `softFixes[]`.
+  - [x] `src/lib/ai/fallback.ts` — static baseline summary keyed by overall band per spec 14 § 5.1, with sample-size disclaimer prepend.
+  - [x] `generateReport()` returns discriminated outcome (`'success' | 'fallback'`); on fallback the route DOES NOT cache (spec 14 § 5) and audits both `ai.generation_failed` + `ai.fallback_used`.
+  - [x] Audit metadata for `ai.generate` includes `attempts` and `softFixes` per Q1/A.
+  - [x] Button label "Generating… (up to 30s)" per Q2/A. Fallback card includes a "Retry AI generation" button per Q3/B.
+  - [x] **Prompt v2 rewrite (2026-05-03):** executive_summary changed from a paragraph to an array of 3–5 correlation bullets; action items ≤40 words and required to cite a data signal; baseline reframed as "FOR REFERENCE ONLY". Spec 14 bumped to v0.2.
+  - [x] **Iteration after first v2 test:**
+    - Dropped over-strict `missing_signal_citation` hard fail (was rejecting valid output)
+    - Tolerate label whitespace + case in `action_items` keys
+    - Surface `attemptReasons` + `attemptDetails` in the fallback card so failures are debuggable from the UI (no Neon SQL needed)
+    - Loading UX: animated SVG spinner inline with the button label + 4-row pulsing skeleton replacing the body during generation
+    - `tryParseJsonProgressive()` — multi-strategy JSON extractor (raw → trim → fence-strip → comment-strip → outermost-braces → trailing-comma-strip)
+    - Cleaned the prompt's JSON example so it's syntactically valid (moved `// ...` hints out of the JSON block)
+    - Gemini: `thinkingConfig: { thinkingBudget: 0 }` (thinking was eating output tokens + wall-clock; not needed for our short structured output), maxOutputTokens 2000 → 4000, timeout 30s → 60s
+  - [x] **Verified live (2026-05-03):** Regenerate produces v2 correlation bullets cleanly; AI-adapted action items render under baseline in each Focus Areas card.
+  - [x] Type-check + production build green.
 
 ### Phase 8 — PDF export
 - [ ] React-PDF template
