@@ -51,16 +51,27 @@ export interface GenerateReportInput {
   respondents: RespondentForPrompt[]
 }
 
-// ─── Raw LLM JSON shape (spec 14 § 1, prompt v2) ─────────────────────────
+// ─── Raw LLM JSON shape (spec 14 § 1, prompt v3) ─────────────────────────
 //
-// executive_summary: ARRAY of 3 to 5 correlation bullets, each ≤30 words
-// action_items:      keyed by capability *labels* exactly as they appear
-//                    in src/data/constants.ts (e.g. "Decision Velocity"),
-//                    each value is exactly 2 strings, each ≤40 words
+// executive_summary: ARRAY of 3 to 5 correlation bullets, each ≤30 words.
+// focus_areas:       keyed by capability *labels* exactly as they appear
+//                    in src/data/constants.ts (e.g. "Decision Velocity").
+//                    Each value is { observations: 1-3 strings ≤30 words,
+//                    actions: 1-3 strings ≤25 words }.
+//
+// v3 schema replaces v2's flat `action_items: { label: [string, string] }`.
+// Backward-compat for v2 cached rows is in src/app/admin/.../results/page.tsx
+// (normalizeOutputJson maps v2 actions → v3 actions with empty observations).
 
 export const aiResponseSchema = z.object({
   executive_summary: z.array(z.string().min(1)).min(3).max(5),
-  action_items: z.record(z.string(), z.array(z.string()).length(2)),
+  focus_areas: z.record(
+    z.string(),
+    z.object({
+      observations: z.array(z.string().min(1)).min(1).max(3),
+      actions: z.array(z.string().min(1)).min(1).max(3),
+    }),
+  ),
 })
 
 export type AiResponseRaw = z.infer<typeof aiResponseSchema>

@@ -1,8 +1,12 @@
-// Section 3 — Focus Areas. Top-5 weakest capabilities with two baseline
-// action items each (always rendered) plus, when an AI report is cached
-// for the active filter, two AI-adapted items stacked underneath. Per
-// the Phase-7 alignment 2026-05-03 (Q2/B): both versions visible, since
-// the user wants to compare variance until AI quality is trusted.
+// Section 3 — Focus Areas (prompt v3, alignment 2026-05-03).
+//
+// Each card now has THREE tiers:
+//   1. Observations              — AI analysis (correlations specific to
+//                                  this capability)
+//   2. Correlated Activities     — AI-derived concrete next steps
+//   3. Action Items              — baseline reference (always present)
+//
+// Order: AI tiers FIRST, baseline LAST (per Q3/A in alignment).
 
 import {
   BASELINE_ACTION_ITEMS,
@@ -16,14 +20,14 @@ import { BAND_HEX, BAND_LABEL } from './band-style'
 interface FocusAreasSectionProps {
   aggregates: AggregatedResults
   /**
-   * Optional. When present, the focus-area cards render an extra
-   * "AI-adapted action items" block below the baseline. Maps each
-   * focus-area capability to its two AI-written items.
+   * Optional. When present, the focus-area cards render two AI tiers
+   * (Observations + Correlated Activities) above the baseline tier.
+   * Maps each focus-area capability to its AI observations + actions.
    */
-  aiAdaptedActions?: AiReportOutput['focusAreaActions']
+  aiPerCapability?: AiReportOutput['focusAreas']
 }
 
-export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSectionProps) {
+export function FocusAreasSection({ aggregates, aiPerCapability }: FocusAreasSectionProps) {
   const { focusAreas, capabilities } = aggregates
 
   if (focusAreas.length === 0) {
@@ -39,8 +43,8 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
     )
   }
 
-  const aiByCapability = new Map<CapabilityKey, string[]>(
-    (aiAdaptedActions ?? []).map((a) => [a.capability, a.actions]),
+  const aiByCapability = new Map<CapabilityKey, { observations: string[]; actions: string[] }>(
+    (aiPerCapability ?? []).map((a) => [a.capability, { observations: a.observations, actions: a.actions }]),
   )
 
   return (
@@ -53,7 +57,9 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
           const result = capabilities[cap]
           const pillar = CAPABILITY_TO_PILLAR[cap]
           const [baselineA, baselineB] = BASELINE_ACTION_ITEMS[cap]
-          const aiActions = aiByCapability.get(cap)
+          const ai = aiByCapability.get(cap)
+          const aiObservations = ai?.observations ?? []
+          const aiActions = ai?.actions ?? []
           return (
             <article
               key={cap}
@@ -96,17 +102,21 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
                   ) : null}
 
                   <div className="mt-4 space-y-4">
-                    <ActionList
-                      eyebrow="Baseline action items"
-                      items={[baselineA, baselineB]}
-                    />
-                    {aiActions && aiActions.length > 0 ? (
-                      <ActionList
-                        eyebrow="AI-adapted action items"
+                    {aiObservations.length > 0 ? (
+                      <BulletList eyebrow="Observations" items={aiObservations} variant="ai" />
+                    ) : null}
+                    {aiActions.length > 0 ? (
+                      <NumberedList
+                        eyebrow="Correlated Activities"
                         items={aiActions}
                         variant="ai"
                       />
                     ) : null}
+                    <NumberedList
+                      eyebrow="Action Items"
+                      items={[baselineA, baselineB]}
+                      variant="baseline"
+                    />
                   </div>
                 </div>
               </div>
@@ -118,14 +128,42 @@ export function FocusAreasSection({ aggregates, aiAdaptedActions }: FocusAreasSe
   )
 }
 
-function ActionList({
+function BulletList({
   eyebrow,
   items,
-  variant = 'baseline',
+  variant,
 }: {
   eyebrow: string
   items: string[]
-  variant?: 'baseline' | 'ai'
+  variant: 'ai' | 'baseline'
+}) {
+  const eyebrowColor = variant === 'ai' ? 'text-brand-ochre' : 'text-brand-grey-text'
+  const dotColor = variant === 'ai' ? 'bg-brand-ochre' : 'bg-brand-grey-text'
+  return (
+    <div>
+      <p className={`mb-2 text-[10px] font-bold uppercase tracking-[2px] ${eyebrowColor}`}>
+        {eyebrow}
+      </p>
+      <ul className="space-y-2 text-sm text-brand-dark-blue">
+        {items.map((text, i) => (
+          <li key={i} className="flex gap-2.5">
+            <span className={`mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`} />
+            <span className="leading-relaxed">{text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function NumberedList({
+  eyebrow,
+  items,
+  variant,
+}: {
+  eyebrow: string
+  items: string[]
+  variant: 'ai' | 'baseline'
 }) {
   const eyebrowColor = variant === 'ai' ? 'text-brand-ochre' : 'text-brand-grey-text'
   const bulletBg = variant === 'ai' ? 'bg-brand-ochre/15' : 'bg-brand-grey-soft-bg'

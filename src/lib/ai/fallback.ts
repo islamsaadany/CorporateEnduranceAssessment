@@ -44,13 +44,19 @@ export function buildFallback(input: FallbackInput): AiReportOutput {
   }
   summaryBullets.push(baseSummary)
 
-  const focusAreaActions = input.focusAreas.map((capability) => ({
+  // v3 shape: each focus area has `observations` (empty in fallback) +
+  // `actions` (the static baseline two-pack from constants). The UI's
+  // baseline-action-items tier uses BASELINE_ACTION_ITEMS directly, so
+  // the AI-tier `actions` here just mirror the baseline as a graceful
+  // degradation when AI is unavailable.
+  const focusAreas = input.focusAreas.map((capability) => ({
     capability,
+    observations: [] as string[],
     actions: [...BASELINE_ACTION_ITEMS[capability]],
   }))
 
   return {
     executiveSummary: summaryBullets,
-    focusAreaActions,
+    focusAreas,
   }
 }

@@ -1,5 +1,9 @@
 /**
- * Spec-14 § 4 validators (prompt v2).
+ * Spec-14 § 4 validators (prompt v3).
+ *
+ * v3 schema: each focus area has both `observations` (1-3, ≤30 words)
+ * AND `actions` (1-3, ≤25 words). Replaces v2's flat per-capability
+ * `actions: string[]`.
  *
  * Two failure categories:
  *   - Hard fail   → orchestrator retries once with augmented prompt; if
@@ -10,14 +14,6 @@
  *
  * Caller (src/lib/ai/index.ts) is responsible for JSON.parse + the
  * structural Zod check from src/lib/ai/types.ts.
- *
- * Prompt v2 changes vs v1:
- *   - executive_summary is an ARRAY of 3–5 bullets, each ≤30 words
- *     (was a single ≤120-word paragraph)
- *   - action items ≤40 words (was ≤25)
- *   - new HARD rule: each action item must cite at least one data
- *     signal (spread keyword, demographic name, filter context, or
- *     a named capability label)
  */
 
 import { CAPABILITY_LABELS } from '@/data/constants'
@@ -25,6 +21,7 @@ import type { AiReportOutput, CapabilityKey } from '@/data/types'
 
 export type SoftFix =
   | 'truncated_summary_bullet'
+  | 'truncated_observation'
   | 'truncated_action_item'
   | 'replaced_em_dashes'
   | 'stripped_emoji_or_exclamation'
@@ -33,7 +30,8 @@ export type SoftFix =
 export type HardFailReason =
   | 'shape_mismatch'
   | 'missing_focus_area_keys'
-  | 'extra_action_keys'
+  | 'extra_focus_area_keys'
+  | 'wrong_observation_count'
   | 'wrong_action_count'
   | 'first_person_address'
   | 'multiple_numeric_references'
@@ -43,7 +41,8 @@ export type ValidationOutcome =
   | { ok: false; reason: HardFailReason; detail: string }
 
 const SUMMARY_BULLET_WORD_LIMIT = 30
-const ACTION_WORD_LIMIT = 40
+const OBSERVATION_WORD_LIMIT = 30
+const ACTION_WORD_LIMIT = 25
 
 const NUMERIC_SCORE_RE = /\b\d\.\d{1,2}\b/g
 const FIRST_PERSON_RE = /\b(?:you|your|we)\b/gi
@@ -51,17 +50,15 @@ const EMOJI_RE = /\p{Extended_Pictographic}/gu
 
 interface RawAi {
   executive_summary: string[]
-  action_items: Record<string, string[]>
+  focus_areas: Record<string, { observations: string[]; actions: string[] }>
 }
 
 /**
  * Run the full pipeline.
  *
- * Note: the `departmentNamesInPrompt` arg is kept on the signature for
- * forward-compat with callers, but is no longer consulted. The
- * signal-citation hard-fail rule was dropped 2026-05-03 (over-strict
- * keyword matching was rejecting valid AI output and forcing fallback).
- * The system prompt still asks for citations; we trust the prompt now.
+ * `_departmentNamesInPrompt` is kept on the signature for forward-compat
+ * but is no longer consulted (the signal-citation hard fail was dropped
+ * in v2).
  */
 export function validate(
   raw: RawAi,
@@ -71,65 +68,70 @@ export function validate(
 ): ValidationOutcome {
   const softFixes: SoftFix[] = []
 
-  // ── Tolerate label whitespace + case in action_items keys ───────────
-  // Gemini sometimes emits "Decision Velocity " with a trailing space or
-  // "decision velocity" lowercase — accept these as the canonical label.
+  // ── Tolerate label whitespace + case in focus_areas keys ────────────
   const expectedLabels = focusAreas.map((c) => CAPABILITY_LABELS[c])
   const normalize = (s: string) => s.trim().toLowerCase()
   const normalizedToCanonical: Record<string, string> = {}
   for (const lbl of expectedLabels) normalizedToCanonical[normalize(lbl)] = lbl
 
-  const normalizedActionItems: Record<string, string[]> = {}
+  const normalizedFocusAreas: Record<string, { observations: string[]; actions: string[] }> = {}
   const extraOriginals: string[] = []
-  for (const [k, v] of Object.entries(raw.action_items)) {
+  for (const [k, v] of Object.entries(raw.focus_areas)) {
     const canonical = normalizedToCanonical[normalize(k)]
     if (canonical) {
-      normalizedActionItems[canonical] = v
+      normalizedFocusAreas[canonical] = v
     } else {
       extraOriginals.push(k)
     }
   }
 
-  const missing = expectedLabels.filter((k) => !(k in normalizedActionItems))
+  const missing = expectedLabels.filter((k) => !(k in normalizedFocusAreas))
   if (missing.length > 0) {
     return {
       ok: false,
       reason: 'missing_focus_area_keys',
-      detail: `Missing keys in action_items: ${missing.join(', ')}.`,
+      detail: `Missing keys in focus_areas: ${missing.join(', ')}.`,
     }
   }
 
   if (extraOriginals.length > 0) {
     return {
       ok: false,
-      reason: 'extra_action_keys',
-      detail: `Unexpected keys in action_items: ${extraOriginals.join(', ')}. Expected exactly: ${expectedLabels.join(', ')}.`,
+      reason: 'extra_focus_area_keys',
+      detail: `Unexpected keys in focus_areas: ${extraOriginals.join(', ')}. Expected exactly: ${expectedLabels.join(', ')}.`,
     }
   }
 
-  // ── Each capability key has exactly 2 strings ────────────────────────
+  // ── Per-capability counts ────────────────────────────────────────────
   for (const label of expectedLabels) {
-    const items = normalizedActionItems[label]
-    if (!Array.isArray(items) || items.length !== 2) {
+    const fa = normalizedFocusAreas[label]
+    if (!fa || !Array.isArray(fa.observations) || fa.observations.length < 1 || fa.observations.length > 3) {
       return {
         ok: false,
-        reason: 'wrong_action_count',
-        detail: `Capability "${label}" must have exactly 2 action items (got ${items?.length ?? 0}).`,
+        reason: 'wrong_observation_count',
+        detail: `Capability "${label}" must have 1 to 3 observations (got ${fa?.observations?.length ?? 0}).`,
       }
     }
-    if (!items.every((s) => typeof s === 'string' && s.trim().length > 0)) {
+    if (!Array.isArray(fa.actions) || fa.actions.length < 1 || fa.actions.length > 3) {
       return {
         ok: false,
         reason: 'wrong_action_count',
-        detail: `Capability "${label}" has non-string or empty action items.`,
+        detail: `Capability "${label}" must have 1 to 3 actions (got ${fa?.actions?.length ?? 0}).`,
+      }
+    }
+    if (
+      !fa.observations.every((s) => typeof s === 'string' && s.trim().length > 0) ||
+      !fa.actions.every((s) => typeof s === 'string' && s.trim().length > 0)
+    ) {
+      return {
+        ok: false,
+        reason: 'wrong_observation_count',
+        detail: `Capability "${label}" has non-string or empty entries.`,
       }
     }
   }
 
-  // From here on, work against `normalizedActionItems`, not raw.action_items.
-  const rawActions = normalizedActionItems
-
-  // ── Soft fix: em dashes in summary bullets + actions ────────────────
+  // ── Soft fix: em dashes in summary, observations, actions ────────────
   let summaryBullets = raw.executive_summary.map((b) => b)
   let summaryHadEmDash = false
   summaryBullets = summaryBullets.map((b) => {
@@ -137,116 +139,125 @@ export function validate(
     return b.replaceAll('—', '. ')
   })
 
-  const actions: Record<string, [string, string]> = {}
-  let anyActionEmDash = false
+  const observations: Record<string, string[]> = {}
+  const actions: Record<string, string[]> = {}
+  let anyEmDash = summaryHadEmDash
   for (const label of expectedLabels) {
-    const [a, b] = rawActions[label]
-    const aHad = a.includes('—')
-    const bHad = b.includes('—')
-    actions[label] = [a.replaceAll('—', '. '), b.replaceAll('—', '. ')]
-    if (aHad || bHad) anyActionEmDash = true
+    const obs = normalizedFocusAreas[label].observations
+    const acts = normalizedFocusAreas[label].actions
+    observations[label] = obs.map((o) => {
+      if (o.includes('—')) anyEmDash = true
+      return o.replaceAll('—', '. ')
+    })
+    actions[label] = acts.map((a) => {
+      if (a.includes('—')) anyEmDash = true
+      return a.replaceAll('—', '. ')
+    })
   }
-  if (summaryHadEmDash || anyActionEmDash) softFixes.push('replaced_em_dashes')
+  if (anyEmDash) softFixes.push('replaced_em_dashes')
 
   // ── Soft fix: strip emoji + exclamation marks ────────────────────────
   const stripExclaim = (s: string) => s.replaceAll('!', '.')
   const stripEmoji = (s: string) => s.replace(EMOJI_RE, '')
-  let summaryHadEmojiOrExclaim = false
-  summaryBullets = summaryBullets.map((b) => {
-    if (EMOJI_RE.test(b) || b.includes('!')) summaryHadEmojiOrExclaim = true
+  let anyEmojiOrExclaim = false
+  const checkAndStrip = (s: string): string => {
+    if (EMOJI_RE.test(s) || s.includes('!')) anyEmojiOrExclaim = true
     EMOJI_RE.lastIndex = 0
-    return stripEmoji(stripExclaim(b))
-  })
-  let anyActionEmojiOrExclaim = false
+    return stripEmoji(stripExclaim(s))
+  }
+  summaryBullets = summaryBullets.map(checkAndStrip)
   for (const label of expectedLabels) {
-    const [a, b] = actions[label]
-    if (EMOJI_RE.test(a) || EMOJI_RE.test(b) || a.includes('!') || b.includes('!')) {
-      anyActionEmojiOrExclaim = true
-    }
-    EMOJI_RE.lastIndex = 0
-    actions[label] = [stripEmoji(stripExclaim(a)), stripEmoji(stripExclaim(b))]
+    observations[label] = observations[label].map(checkAndStrip)
+    actions[label] = actions[label].map(checkAndStrip)
   }
-  if (summaryHadEmojiOrExclaim || anyActionEmojiOrExclaim) {
-    softFixes.push('stripped_emoji_or_exclamation')
-  }
+  if (anyEmojiOrExclaim) softFixes.push('stripped_emoji_or_exclamation')
 
-  // ── Numeric scores: 1 occurrence in a bullet/action → strip its
-  //    sentence; >1 occurrences in any single string → hard fail.
-  let summaryStrippedNumeric = false
-  summaryBullets = summaryBullets.map((b) => {
-    const matches = b.match(NUMERIC_SCORE_RE) ?? []
+  // ── Numeric scores: 1 in a string → strip its sentence; >1 → hard fail
+  let strippedAnyNumeric = false
+  const checkNumeric = (s: string, where: string): { val: string; hardFail?: HardFailReason } => {
+    const matches = s.match(NUMERIC_SCORE_RE) ?? []
     if (matches.length > 1) {
-      // Defer to hard-fail handler below.
-      return b
+      return { val: s, hardFail: 'multiple_numeric_references' }
     }
     if (matches.length === 1) {
-      summaryStrippedNumeric = true
-      return stripSentenceContaining(b, NUMERIC_SCORE_RE)
+      strippedAnyNumeric = true
+      return { val: stripSentenceContaining(s, NUMERIC_SCORE_RE) }
     }
-    return b
-  })
-  for (const b of summaryBullets) {
-    const matches = b.match(NUMERIC_SCORE_RE) ?? []
-    if (matches.length > 1) {
+    void where
+    return { val: s }
+  }
+  for (let i = 0; i < summaryBullets.length; i++) {
+    const r = checkNumeric(summaryBullets[i], 'executive summary')
+    if (r.hardFail) {
       return {
         ok: false,
-        reason: 'multiple_numeric_references',
-        detail: `Executive summary bullet contains ${matches.length} numeric score references; spec 14 § 4 forbids any.`,
+        reason: r.hardFail,
+        detail: `Executive summary bullet contains multiple numeric score references; spec 14 § 4 forbids any.`,
       }
     }
+    summaryBullets[i] = r.val
   }
-  let actionStrippedNumeric = false
   for (const label of expectedLabels) {
-    const [a, b] = actions[label]
-    const aMatches = a.match(NUMERIC_SCORE_RE) ?? []
-    const bMatches = b.match(NUMERIC_SCORE_RE) ?? []
-    if (aMatches.length > 1 || bMatches.length > 1) {
-      return {
-        ok: false,
-        reason: 'multiple_numeric_references',
-        detail: `Action item under "${label}" contains multiple numeric score references.`,
+    for (let i = 0; i < observations[label].length; i++) {
+      const r = checkNumeric(observations[label][i], `observation in "${label}"`)
+      if (r.hardFail) {
+        return {
+          ok: false,
+          reason: r.hardFail,
+          detail: `Observation under "${label}" contains multiple numeric score references.`,
+        }
       }
+      observations[label][i] = r.val
     }
-    actions[label] = [
-      aMatches.length === 1 ? stripSentenceContaining(a, NUMERIC_SCORE_RE) : a,
-      bMatches.length === 1 ? stripSentenceContaining(b, NUMERIC_SCORE_RE) : b,
-    ]
-    if (aMatches.length === 1 || bMatches.length === 1) actionStrippedNumeric = true
+    for (let i = 0; i < actions[label].length; i++) {
+      const r = checkNumeric(actions[label][i], `action in "${label}"`)
+      if (r.hardFail) {
+        return {
+          ok: false,
+          reason: r.hardFail,
+          detail: `Action under "${label}" contains multiple numeric score references.`,
+        }
+      }
+      actions[label][i] = r.val
+    }
   }
-  if (summaryStrippedNumeric || actionStrippedNumeric) {
-    softFixes.push('stripped_numeric_sentence')
-  }
+  if (strippedAnyNumeric) softFixes.push('stripped_numeric_sentence')
 
   // ── First-person address: hard fail
+  const checkFirstPerson = (s: string): boolean => {
+    const matched = FIRST_PERSON_RE.test(s)
+    FIRST_PERSON_RE.lastIndex = 0
+    return matched
+  }
   for (const b of summaryBullets) {
-    if (FIRST_PERSON_RE.test(b)) {
-      FIRST_PERSON_RE.lastIndex = 0
+    if (checkFirstPerson(b)) {
       return {
         ok: false,
         reason: 'first_person_address',
-        detail: 'Executive summary uses first-person address ("you", "your", or "we"). Spec 14 § 4 forbids this — rewrite in the third person about "the organization" or "this segment".',
+        detail: 'Executive summary uses first-person address ("you", "your", or "we"). Spec 14 § 4 forbids this — rewrite in the third person.',
       }
     }
-    FIRST_PERSON_RE.lastIndex = 0
   }
   for (const label of expectedLabels) {
-    for (const item of actions[label]) {
-      if (FIRST_PERSON_RE.test(item)) {
-        FIRST_PERSON_RE.lastIndex = 0
+    for (const o of observations[label]) {
+      if (checkFirstPerson(o)) {
         return {
           ok: false,
           reason: 'first_person_address',
-          detail: `Action item under "${label}" uses first-person address. Rewrite in the third person.`,
+          detail: `Observation under "${label}" uses first-person address. Rewrite in the third person.`,
         }
       }
-      FIRST_PERSON_RE.lastIndex = 0
+    }
+    for (const a of actions[label]) {
+      if (checkFirstPerson(a)) {
+        return {
+          ok: false,
+          reason: 'first_person_address',
+          detail: `Action under "${label}" uses first-person address. Rewrite in the third person.`,
+        }
+      }
     }
   }
-
-  // Note: the signal-citation hard fail (require each action item to
-  // include a spread/demographic/filter/capability keyword) was dropped
-  // 2026-05-03 — over-strict matching was forcing fallback on otherwise-
-  // good output. The system prompt still asks for citations.
 
   // ── Word-count truncation (soft fixes) ───────────────────────────────
   let truncatedAnyBullet = false
@@ -257,19 +268,27 @@ export function validate(
   })
   if (truncatedAnyBullet) softFixes.push('truncated_summary_bullet')
 
+  let truncatedAnyObservation = false
   let truncatedAnyAction = false
   for (const label of expectedLabels) {
-    const [a, b] = actions[label]
-    const ta = truncateAtWordBoundary(a, ACTION_WORD_LIMIT)
-    const tb = truncateAtWordBoundary(b, ACTION_WORD_LIMIT)
-    if (ta !== a || tb !== b) truncatedAnyAction = true
-    actions[label] = [ta, tb]
+    observations[label] = observations[label].map((o) => {
+      const t = truncateAtWordBoundary(o, OBSERVATION_WORD_LIMIT)
+      if (t !== o) truncatedAnyObservation = true
+      return t
+    })
+    actions[label] = actions[label].map((a) => {
+      const t = truncateAtWordBoundary(a, ACTION_WORD_LIMIT)
+      if (t !== a) truncatedAnyAction = true
+      return t
+    })
   }
+  if (truncatedAnyObservation) softFixes.push('truncated_observation')
   if (truncatedAnyAction) softFixes.push('truncated_action_item')
 
   // ── Build AiReportOutput ────────────────────────────────────────────
-  const focusAreaActions = focusAreas.map((capability) => ({
+  const focusAreasOut = focusAreas.map((capability) => ({
     capability,
+    observations: observations[CAPABILITY_LABELS[capability]],
     actions: actions[CAPABILITY_LABELS[capability]],
   }))
 
@@ -277,7 +296,7 @@ export function validate(
     ok: true,
     output: {
       executiveSummary: summaryBullets.map((b) => b.trim()).filter((b) => b.length > 0),
-      focusAreaActions,
+      focusAreas: focusAreasOut,
     },
     softFixes,
   }

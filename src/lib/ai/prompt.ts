@@ -42,8 +42,11 @@ import type { GenerateReportInput } from './types'
  * v1: Initial paragraph-style executive summary (spec 14 v0.1).
  * v2: Correlation bullets, signal-citation rule, anti-paraphrase framing
  *     (spec 14 v0.2).
+ * v3: Per-focus-area split into Observations (1-3 correlation bullets,
+ *     ≤30 words) + Actions (1-3 concrete items, ≤25 words). Replaces
+ *     v2's flat per-capability `action_items` (spec 14 v0.3).
  */
-export const CURRENT_PROMPT_VERSION = 2
+export const CURRENT_PROMPT_VERSION = 3
 
 /**
  * Mirrors product-spec/14_ai_prompts.md § 2.
@@ -69,13 +72,9 @@ Your job is to produce TWO things, returned as a single JSON object:
    - Focus-area concentration ("Three of the top-5 focus areas sit in Resilience, suggesting renewal is the binding constraint, not raw operational toughness.")
    Each bullet ≤ 30 words. NO bullet may merely state a single capability's band — the value of the bullet IS the relationship.
 
-2. An "action_items" object: a dictionary keyed by capability name (one key per focus-area capability), with each value being an array of exactly 2 strings.
-   Each action item ≤ 40 words. Each action item MUST cite at least one of:
-   - A spread signal (when the team is split on this capability)
-   - A demographic pattern (which level, department, or tenure band drives the gap)
-   - The filter context (e.g., "for this Sales × Manager segment...")
-   - A tension with another capability (named explicitly)
-   Action items must be SUBSTANTIVELY DIFFERENT from the baseline action items provided. If your action item could be lifted into any other organization's report unchanged, it has not been adapted — produce something that names a data signal.
+2. A "focus_areas" object: a dictionary keyed by capability name (one key per focus-area capability). Each value is an object with TWO arrays:
+   - "observations": 1 to 3 short strings (each ≤ 30 words). Each observation is a CORRELATION specific to this capability — what does the data say about THIS capability's gap? Tie it to a spread signal, a demographic pattern, the filter context, or a tension with another capability. These are analytical, not prescriptive.
+   - "actions": 1 to 3 short strings (each ≤ 25 words). Each action is a CONCRETE NEXT STEP that follows from your observations. Actions should be specific enough to assign an owner and a deadline. They must be SUBSTANTIVELY DIFFERENT from the baseline action items provided — if your action could be lifted into any other organization's report unchanged, it hasn't been adapted to this segment.
 
 Hard rules:
 - Never reference numeric scores in any output. Use band names ("Critical Gap", "Needs Work", "Solid", "Strong") instead.
@@ -85,7 +84,7 @@ Hard rules:
 - Use the executive register: serious, confident, plain English, active voice.
 - Always write in the third person about "the organization" or "this segment" — never address "you" or "your team" directly.
 - Always return valid JSON conforming to the schema given in the user prompt. Do not wrap the JSON in markdown code fences.
-- If you must include a caveat about sample size, do it in one bullet of the executive_summary, not in every action item.`
+- If you must include a caveat about sample size, do it in one bullet of the executive_summary, not in every observation/action.`
 
 /** Spread > this triggers the "team is split" framing per spec 14 § 3 notes. */
 const SPREAD_HIGH_THRESHOLD = 1.0
@@ -193,13 +192,17 @@ function formatUserPrompt(input: GenerateReportInput, anon: AnonymizedRespondent
   lines.push('Schema notes (read these BEFORE generating, do not include them in your output):')
   lines.push('- "executive_summary" is an array of 3 to 5 strings. Each string must be a correlation between two or more data points (≤30 words). Do NOT emit a bullet that just states one capability\'s band.')
   if (aggregates.focusAreas.length === 0) {
-    lines.push('- "action_items" must be an empty object {} because no focus areas were identified.')
+    lines.push('- "focus_areas" must be an empty object {} because no focus areas were identified.')
   } else {
-    lines.push('- "action_items" must have exactly these 5 keys (capability labels), spelled exactly as shown:')
+    lines.push('- "focus_areas" must have exactly these 5 keys (capability labels), spelled exactly as shown:')
     for (const capKey of aggregates.focusAreas) {
       lines.push(`    "${CAPABILITY_LABELS[capKey]}"`)
     }
-    lines.push('- Each value is an array of exactly 2 strings (≤40 words each). Each action item should reference a data signal where natural (spread, demographic pattern, filter context, or a named capability tension).')
+    lines.push('- Each value is an object with two arrays:')
+    lines.push('    "observations": 1 to 3 strings (≤30 words each) — analytical, name a correlation/pattern specific to this capability')
+    lines.push('    "actions": 1 to 3 strings (≤25 words each) — concrete next steps derived from those observations, terse and specific')
+    lines.push('- Observations should reference a data signal (spread, demographic pattern, filter context, or named capability tension).')
+    lines.push('- Actions must be substantively different from the baseline action items provided.')
   }
   lines.push('')
   lines.push('Shape:')
@@ -209,16 +212,22 @@ function formatUserPrompt(input: GenerateReportInput, anon: AnonymizedRespondent
   lines.push('    "Second correlation bullet here.",')
   lines.push('    "Third correlation bullet here."')
   lines.push('  ],')
-  lines.push('  "action_items": {')
+  lines.push('  "focus_areas": {')
   if (aggregates.focusAreas.length === 0) {
     // empty object — schema notes above already explain this
   } else {
     aggregates.focusAreas.forEach((capKey, i) => {
       const trail = i < aggregates.focusAreas.length - 1 ? ',' : ''
-      lines.push(`    "${CAPABILITY_LABELS[capKey]}": [`)
-      lines.push(`      "First action item for ${CAPABILITY_LABELS[capKey]}.",`)
-      lines.push(`      "Second action item for ${CAPABILITY_LABELS[capKey]}."`)
-      lines.push(`    ]${trail}`)
+      lines.push(`    "${CAPABILITY_LABELS[capKey]}": {`)
+      lines.push(`      "observations": [`)
+      lines.push(`        "First observation about ${CAPABILITY_LABELS[capKey]}.",`)
+      lines.push(`        "Second observation about ${CAPABILITY_LABELS[capKey]}."`)
+      lines.push(`      ],`)
+      lines.push(`      "actions": [`)
+      lines.push(`        "First action item for ${CAPABILITY_LABELS[capKey]}.",`)
+      lines.push(`        "Second action item for ${CAPABILITY_LABELS[capKey]}."`)
+      lines.push(`      ]`)
+      lines.push(`    }${trail}`)
     })
   }
   lines.push('  }')
