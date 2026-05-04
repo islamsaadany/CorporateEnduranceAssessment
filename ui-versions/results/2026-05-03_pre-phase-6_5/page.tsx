@@ -21,7 +21,6 @@ import { PreliminaryBanner } from './banners'
 import { FilterControls } from './filter-controls'
 import { LockCard } from './lock-card'
 import { SummarySection } from './summary-section'
-import { WhoRespondedSection } from './who-responded-section'
 import { CapabilityProfileSection } from './capability-profile-section'
 import { FocusAreasSection } from './focus-areas-section'
 import { IndividualResponsesSection } from './individual-responses-section'
@@ -142,11 +141,10 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
             noFocusAreas={noFocusAreas}
           />
           <SummarySection aggregates={aggregates} />
-          <WhoRespondedSection allSubmittedDemos={bundle.allSubmittedDemos} />
           <CapabilityProfileSection aggregates={aggregates} />
           <FocusAreasSection
             aggregates={aggregates}
-            aiPerCapability={cachedReport?.outputJson.focusAreas}
+            aiAdaptedActions={cachedReport?.outputJson.focusAreaActions}
           />
           <IndividualResponsesSection respondents={respondents} />
         </div>
@@ -156,44 +154,19 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
 }
 
 /**
- * Backward-compat shim covering all prompt-version migrations:
- *   v1 → v2: `executiveSummary` was a single string; wrap as one-bullet array
- *   v2 → v3: `focusAreaActions: [{capability, actions}]` → `focusAreas:
- *            [{capability, observations: [], actions}]`
- *
- * Legacy rows render without crashing; the AI section already shows a
- * "regenerate for the latest framing" note when `promptVersion <
- * CURRENT_PROMPT_VERSION`. Per CLAUDE.md we never silently invalidate.
+ * Backward-compat shim: prompt v1 cached `executiveSummary` as a single
+ * paragraph string. Prompt v2 (2026-05-03) made it a string[] of bullets.
+ * Wrap legacy rows so `<SummaryBullets>` renders without crashing; the
+ * AI section already shows a "regenerate for the latest framing" note
+ * for older promptVersion rows.
  */
 function normalizeOutputJson(raw: AiReportOutput): AiReportOutput {
-  // ── executiveSummary: string (v1) → string[] ────────────────────────
-  let executiveSummary: string[]
   const summary = raw.executiveSummary as unknown
   if (typeof summary === 'string') {
-    executiveSummary = [summary]
-  } else if (Array.isArray(summary)) {
-    executiveSummary = summary as string[]
-  } else {
-    executiveSummary = []
+    return { ...raw, executiveSummary: [summary] }
   }
-
-  // ── focusAreas: v2's focusAreaActions → v3's focusAreas ─────────────
-  let focusAreas: AiReportOutput['focusAreas']
-  const v3 = (raw as { focusAreas?: AiReportOutput['focusAreas'] }).focusAreas
-  if (Array.isArray(v3)) {
-    focusAreas = v3
-  } else {
-    const v2 = (raw as { focusAreaActions?: Array<{ capability: AiReportOutput['focusAreas'][number]['capability']; actions: string[] }> }).focusAreaActions
-    if (Array.isArray(v2)) {
-      focusAreas = v2.map((fa) => ({
-        capability: fa.capability,
-        observations: [],
-        actions: fa.actions,
-      }))
-    } else {
-      focusAreas = []
-    }
+  if (Array.isArray(summary)) {
+    return { ...raw, executiveSummary: summary as string[] }
   }
-
-  return { ...raw, executiveSummary, focusAreas }
+  return { ...raw, executiveSummary: [] }
 }

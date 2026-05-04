@@ -25,12 +25,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 Dashboard
               </Link>
               {isSuperAdmin ? (
-                <Link href="/admin/settings/ai" className="transition hover:text-ink">
-                  AI settings
-                </Link>
+                <>
+                  <Link href="/admin/settings/ai" className="transition hover:text-ink">
+                    AI settings
+                  </Link>
+                  <Link href="/admin/admins" className="transition hover:text-ink">
+                    Admins
+                  </Link>
+                </>
               ) : null}
-              {/* "Admins" link lands in Phase 10 — removed for now to
-                  avoid 404 prefetches in the browser console. */}
             </nav>
           </div>
 

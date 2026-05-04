@@ -6,7 +6,7 @@ import { prisma } from './prisma'
 import type { AdminRole } from '@prisma/client'
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  username: z.string().trim().min(1),
   password: z.string().min(1),
 })
 
@@ -16,19 +16,80 @@ export const authConfig = {
   providers: [
     Credentials({
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        username: { label: 'Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
       authorize: async (raw) => {
         const parsed = credentialsSchema.safeParse(raw)
         if (!parsed.success) return null
 
-        const admin = await prisma.admin.findUnique({
-          where: { email: parsed.data.email.toLowerCase() },
-        })
+        // Username is stored in the Admin.email column (a generic unique
+        // identifier — the column predates the rename and is left in
+        // place to avoid an unnecessary schema migration). Lowercased
+        // for case-insensitive matching.
+        const username = parsed.data.username.toLowerCase()
+        const password = parsed.data.password
+
+        // Env-var super admin login (recovery path).
+        //
+        // If ADMIN_USERNAME + ADMIN_PASSWORD are set in the environment
+        // and match the supplied credentials, log the user in as the
+        // super admin. The DB row is created/repaired on demand so that
+        // audit logs (actorAdminId) and assessment ownership keep
+        // working. The DB password hash for this row is not consulted
+        // on this code path — env-var match alone authenticates.
+        //
+        // Security trade-off: the password lives in plaintext in the
+        // Vercel env-var dashboard. This is acceptable per the user's
+        // explicit decision (recovery loop > additional surface). The
+        // dashboard surfaces a persistent banner whenever these env vars
+        // are set so the trade-off stays visible. See CLAUDE.md.
+        const envUsername = process.env.ADMIN_USERNAME?.toLowerCase()
+        const envPassword = process.env.ADMIN_PASSWORD
+        if (envUsername && envPassword && envUsername === username && envPassword === password) {
+          const existing = await prisma.admin.findUnique({ where: { email: username } })
+          if (existing) {
+            // Repair: deactivated super admin row should still let env login through.
+            const repaired =
+              existing.role !== 'super_admin' || !existing.isActive
+                ? await prisma.admin.update({
+                    where: { id: existing.id },
+                    data: { role: 'super_admin', isActive: true },
+                  })
+                : existing
+            return {
+              id: repaired.id,
+              email: repaired.email,
+              name: repaired.name,
+              role: repaired.role,
+            }
+          }
+          // No row yet — create one. passwordHash is set to a hash of the
+          // env password as a sane initial value; env-var match is what
+          // actually authenticates going forward.
+          const created = await prisma.admin.create({
+            data: {
+              email: username,
+              name: 'Super Admin',
+              passwordHash: await bcrypt.hash(password, 10),
+              role: 'super_admin',
+              isActive: true,
+            },
+          })
+          return {
+            id: created.id,
+            email: created.email,
+            name: created.name,
+            role: created.role,
+          }
+        }
+
+        // Standard DB-backed login for everyone else (and for the super
+        // admin when env vars are not set).
+        const admin = await prisma.admin.findUnique({ where: { email: username } })
         if (!admin || !admin.isActive) return null
 
-        const ok = await bcrypt.compare(parsed.data.password, admin.passwordHash)
+        const ok = await bcrypt.compare(password, admin.passwordHash)
         if (!ok) return null
 
         return {

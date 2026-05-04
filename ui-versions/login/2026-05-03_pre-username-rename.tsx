@@ -11,7 +11,7 @@ interface LoginFormProps {
 
 export function LoginForm({ callbackUrl, initialError }: LoginFormProps) {
   const router = useRouter()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(initialError ? humanizeError(initialError) : null)
   const [pending, startTransition] = useTransition()
@@ -20,9 +20,9 @@ export function LoginForm({ callbackUrl, initialError }: LoginFormProps) {
     e.preventDefault()
     setError(null)
     startTransition(async () => {
-      const res = await signIn('credentials', { redirect: false, username, password, callbackUrl })
+      const res = await signIn('credentials', { redirect: false, email, password, callbackUrl })
       if (!res || res.error) {
-        setError('Username or password is incorrect.')
+        setError('Email or password is incorrect.')
         return
       }
       router.push(res.url ?? callbackUrl)
@@ -39,13 +39,13 @@ export function LoginForm({ callbackUrl, initialError }: LoginFormProps) {
       ) : null}
 
       <label className="block text-sm">
-        <span className="mb-1 block font-medium text-ink">Username</span>
+        <span className="mb-1 block font-medium text-ink">Email</span>
         <input
-          type="text"
+          type="email"
           required
-          autoComplete="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="w-full rounded-md border border-canvas-border bg-canvas px-3 py-2 text-ink outline-none transition focus:border-ink focus:ring-1 focus:ring-ink"
         />
       </label>
@@ -76,7 +76,7 @@ export function LoginForm({ callbackUrl, initialError }: LoginFormProps) {
 function humanizeError(code: string): string {
   switch (code) {
     case 'CredentialsSignin':
-      return 'Username or password is incorrect.'
+      return 'Email or password is incorrect.'
     case 'AccessDenied':
       return 'This account is disabled.'
     default:

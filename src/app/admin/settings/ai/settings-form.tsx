@@ -1,0 +1,268 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+
+const PROVIDERS = ['gemini', 'claude', 'openai'] as const
+type ProviderKey = (typeof PROVIDERS)[number]
+
+const PROVIDER_LABEL: Record<ProviderKey, string> = {
+  gemini: 'Google Gemini',
+  claude: 'Anthropic Claude',
+  openai: 'OpenAI',
+}
+
+export interface ProviderState {
+  source: 'db' | 'env' | 'none'
+  lastFour: string | null
+  envVarName: string
+}
+
+interface Props {
+  initialProvider: ProviderKey
+  initialProviders: Record<ProviderKey, ProviderState>
+}
+
+type TestResult =
+  | { status: 'idle' }
+  | { status: 'running' }
+  | { status: 'ok'; source: 'supplied' | 'db' | 'env' }
+  | { status: 'error'; message: string }
+
+export function SettingsAiForm({ initialProvider, initialProviders }: Props) {
+  const router = useRouter()
+  const [provider, setProvider] = useState<ProviderKey>(initialProvider)
+  const [providers, setProviders] = useState<Record<ProviderKey, ProviderState>>(initialProviders)
+  const [apiKey, setApiKey] = useState('')
+  const [testResult, setTestResult] = useState<TestResult>({ status: 'idle' })
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  const providerChanged = provider !== initialProvider
+  const keyEntered = apiKey.trim().length > 0
+  const canSave = providerChanged || keyEntered
+  const currentState = providers[provider]
+
+  function clearStatus() {
+    setTestResult({ status: 'idle' })
+    setSaveError(null)
+    setSaveSuccess(false)
+  }
+
+  async function handleTest() {
+    clearStatus()
+    setTestResult({ status: 'running' })
+    try {
+      const res = await fetch('/api/settings/ai/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          apiKey: keyEntered ? apiKey.trim() : undefined,
+        }),
+      })
+      const data = (await res.json()) as
+        | { ok: true; source: 'supplied' | 'db' | 'env' }
+        | { ok: false; message?: string; error?: string }
+      if ('ok' in data && data.ok) {
+        setTestResult({ status: 'ok', source: data.source })
+      } else {
+        setTestResult({
+          status: 'error',
+          message: data.message ?? data.error ?? 'Test failed.',
+        })
+      }
+    } catch (err) {
+      setTestResult({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Network error.',
+      })
+    }
+  }
+
+  async function handleSave() {
+    clearStatus()
+    const body: Record<string, unknown> = {}
+    if (providerChanged) body.provider = provider
+    if (keyEntered) {
+      body.apiKeyProvider = provider
+      body.apiKey = apiKey.trim()
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch('/api/settings/ai', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string }
+          setSaveError(data.error ?? `Save failed (${res.status}).`)
+          return
+        }
+        // Update local state to reflect saved key (last 4 chars).
+        if (keyEntered) {
+          setProviders((prev) => ({
+            ...prev,
+            [provider]: {
+              source: 'db',
+              lastFour: apiKey.trim().slice(-4),
+              envVarName: prev[provider].envVarName,
+            },
+          }))
+          setApiKey('')
+        }
+        setSaveSuccess(true)
+        // Refresh server props (initialProvider + bootstrap banner).
+        router.refresh()
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'Network error.')
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-5 rounded border border-brand-grey-light bg-white p-6 shadow-sm">
+      {/* Provider selector */}
+      <div className="space-y-2">
+        <label htmlFor="provider" className="block text-xs font-bold uppercase tracking-[2px] text-brand-ochre">
+          Active provider
+        </label>
+        <select
+          id="provider"
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value as ProviderKey)
+            clearStatus()
+          }}
+          disabled={isPending}
+          className="w-full max-w-sm rounded border border-brand-grey-light bg-white px-3 py-2 text-sm text-brand-dark-blue focus:border-brand-dark-blue focus:outline-none focus:ring-1 focus:ring-brand-dark-blue"
+        >
+          {PROVIDERS.map((p) => (
+            <option key={p} value={p}>
+              {PROVIDER_LABEL[p]}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-brand-grey-text">
+          Reports will be generated by this provider. The model variant is fixed per provider.
+        </p>
+      </div>
+
+      <hr className="border-brand-grey-light" />
+
+      {/* API key card for selected provider */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <label htmlFor="apiKey" className="block text-xs font-bold uppercase tracking-[2px] text-brand-ochre">
+            {PROVIDER_LABEL[provider]} API key
+          </label>
+          <SourcePill state={currentState} />
+        </div>
+
+        <input
+          id="apiKey"
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          onChange={(e) => {
+            setApiKey(e.target.value)
+            clearStatus()
+          }}
+          placeholder={`Paste your ${PROVIDER_LABEL[provider]} API key`}
+          disabled={isPending}
+          className="w-full rounded border border-brand-grey-light bg-white px-3 py-2 font-mono text-sm text-brand-dark-blue focus:border-brand-dark-blue focus:outline-none focus:ring-1 focus:ring-brand-dark-blue"
+        />
+
+        {currentState.lastFour ? (
+          <p className="text-xs text-brand-grey-text">
+            {currentState.source === 'db' ? 'Saved key' : 'Bootstrap key from env var'} ending in{' '}
+            <code className="rounded bg-brand-grey-light/40 px-1 py-0.5">••••{currentState.lastFour}</code>
+            {currentState.source === 'env' ? (
+              <>
+                {' '}
+                (<code className="text-[11px]">{currentState.envVarName}</code>)
+              </>
+            ) : null}
+            . Leave the field above empty to test or save without changing it.
+          </p>
+        ) : (
+          <p className="text-xs text-brand-grey-text">
+            No key configured yet for {PROVIDER_LABEL[provider]}.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={
+              isPending ||
+              testResult.status === 'running' ||
+              (currentState.source === 'none' && !keyEntered)
+            }
+            className="rounded border border-brand-dark-blue bg-white px-4 py-2 text-xs font-medium text-brand-dark-blue transition hover:bg-brand-dark-blue hover:text-white disabled:cursor-not-allowed disabled:border-brand-grey-light disabled:bg-white disabled:text-brand-grey-text disabled:hover:bg-white"
+          >
+            {testResult.status === 'running' ? 'Testing…' : 'Test connection'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave || isPending}
+            className="rounded bg-brand-dark-blue px-4 py-2 text-xs font-medium text-white transition hover:bg-brand-dark-blue/90 disabled:cursor-not-allowed disabled:bg-brand-grey-light disabled:text-brand-grey-text"
+          >
+            {isPending ? 'Saving…' : 'Save'}
+          </button>
+
+          <TestResultBadge result={testResult} />
+        </div>
+
+        {saveError ? (
+          <p className="text-xs text-red-700">{saveError}</p>
+        ) : null}
+        {saveSuccess ? (
+          <p className="text-xs text-emerald-700">Settings saved.</p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function SourcePill({ state }: { state: ProviderState }) {
+  if (state.source === 'db') {
+    return (
+      <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px] text-emerald-800">
+        Saved
+      </span>
+    )
+  }
+  if (state.source === 'env') {
+    return (
+      <span className="rounded bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px] text-amber-800">
+        Env fallback
+      </span>
+    )
+  }
+  return (
+    <span className="rounded bg-brand-grey-light/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px] text-brand-grey-text">
+      Not configured
+    </span>
+  )
+}
+
+function TestResultBadge({ result }: { result: TestResult }) {
+  if (result.status === 'idle' || result.status === 'running') return null
+  if (result.status === 'ok') {
+    const sourceLabel =
+      result.source === 'supplied' ? 'pasted key' : result.source === 'db' ? 'saved key' : 'env-var key'
+    return (
+      <span className="text-xs text-emerald-700">
+        ✓ Connected with {sourceLabel}.
+      </span>
+    )
+  }
+  return <span className="text-xs text-red-700">✗ {result.message}</span>
+}

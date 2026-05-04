@@ -1,6 +1,12 @@
-// Section 3 — Focus Areas. Top-5 weakest capabilities with two baseline
-// action items each. Spec 05 § 5, spec 04 § 3 (action items). AI-adapted
-// items land in Phase 7; this slice always renders the baseline.
+// Section 3 — Focus Areas (prompt v3, alignment 2026-05-03).
+//
+// Each card now has THREE tiers:
+//   1. Observations              — AI analysis (correlations specific to
+//                                  this capability)
+//   2. Correlated Activities     — AI-derived concrete next steps
+//   3. Action Items              — baseline reference (always present)
+//
+// Order: AI tiers FIRST, baseline LAST (per Q3/A in alignment).
 
 import {
   BASELINE_ACTION_ITEMS,
@@ -8,14 +14,20 @@ import {
   CAPABILITY_TO_PILLAR,
   PILLAR_LABELS,
 } from '@/data/constants'
-import type { AggregatedResults } from '@/data/types'
+import type { AggregatedResults, AiReportOutput, CapabilityKey } from '@/data/types'
 import { BAND_HEX, BAND_LABEL } from './band-style'
 
 interface FocusAreasSectionProps {
   aggregates: AggregatedResults
+  /**
+   * Optional. When present, the focus-area cards render two AI tiers
+   * (Observations + Correlated Activities) above the baseline tier.
+   * Maps each focus-area capability to its AI observations + actions.
+   */
+  aiPerCapability?: AiReportOutput['focusAreas']
 }
 
-export function FocusAreasSection({ aggregates }: FocusAreasSectionProps) {
+export function FocusAreasSection({ aggregates, aiPerCapability }: FocusAreasSectionProps) {
   const { focusAreas, capabilities } = aggregates
 
   if (focusAreas.length === 0) {
@@ -31,6 +43,10 @@ export function FocusAreasSection({ aggregates }: FocusAreasSectionProps) {
     )
   }
 
+  const aiByCapability = new Map<CapabilityKey, { observations: string[]; actions: string[] }>(
+    (aiPerCapability ?? []).map((a) => [a.capability, { observations: a.observations, actions: a.actions }]),
+  )
+
   return (
     <section>
       <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[3px] text-brand-grey-text">
@@ -40,7 +56,10 @@ export function FocusAreasSection({ aggregates }: FocusAreasSectionProps) {
         {focusAreas.map((cap, i) => {
           const result = capabilities[cap]
           const pillar = CAPABILITY_TO_PILLAR[cap]
-          const [actionA, actionB] = BASELINE_ACTION_ITEMS[cap]
+          const [baselineA, baselineB] = BASELINE_ACTION_ITEMS[cap]
+          const ai = aiByCapability.get(cap)
+          const aiObservations = ai?.observations ?? []
+          const aiActions = ai?.actions ?? []
           return (
             <article
               key={cap}
@@ -81,10 +100,24 @@ export function FocusAreasSection({ aggregates }: FocusAreasSectionProps) {
                       Team is split — range {result.min.toFixed(1)} to {result.max.toFixed(1)}
                     </p>
                   ) : null}
-                  <ol className="mt-4 space-y-2 text-sm text-brand-dark-blue">
-                    <ActionItem index={1} text={actionA} />
-                    <ActionItem index={2} text={actionB} />
-                  </ol>
+
+                  <div className="mt-4 space-y-4">
+                    {aiObservations.length > 0 ? (
+                      <BulletList eyebrow="Observations" items={aiObservations} variant="ai" />
+                    ) : null}
+                    {aiActions.length > 0 ? (
+                      <NumberedList
+                        eyebrow="Correlated Activities"
+                        items={aiActions}
+                        variant="ai"
+                      />
+                    ) : null}
+                    <NumberedList
+                      eyebrow="Action Items"
+                      items={[baselineA, baselineB]}
+                      variant="baseline"
+                    />
+                  </div>
                 </div>
               </div>
             </article>
@@ -95,13 +128,62 @@ export function FocusAreasSection({ aggregates }: FocusAreasSectionProps) {
   )
 }
 
-function ActionItem({ index, text }: { index: number; text: string }) {
+function BulletList({
+  eyebrow,
+  items,
+  variant,
+}: {
+  eyebrow: string
+  items: string[]
+  variant: 'ai' | 'baseline'
+}) {
+  const eyebrowColor = variant === 'ai' ? 'text-brand-ochre' : 'text-brand-grey-text'
+  const dotColor = variant === 'ai' ? 'bg-brand-ochre' : 'bg-brand-grey-text'
   return (
-    <li className="flex gap-2.5">
-      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-grey-soft-bg text-[11px] font-semibold text-brand-dark-blue">
-        {index}
-      </span>
-      <span className="leading-relaxed">{text}</span>
-    </li>
+    <div>
+      <p className={`mb-2 text-[10px] font-bold uppercase tracking-[2px] ${eyebrowColor}`}>
+        {eyebrow}
+      </p>
+      <ul className="space-y-2 text-sm text-brand-dark-blue">
+        {items.map((text, i) => (
+          <li key={i} className="flex gap-2.5">
+            <span className={`mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`} />
+            <span className="leading-relaxed">{text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function NumberedList({
+  eyebrow,
+  items,
+  variant,
+}: {
+  eyebrow: string
+  items: string[]
+  variant: 'ai' | 'baseline'
+}) {
+  const eyebrowColor = variant === 'ai' ? 'text-brand-ochre' : 'text-brand-grey-text'
+  const bulletBg = variant === 'ai' ? 'bg-brand-ochre/15' : 'bg-brand-grey-soft-bg'
+  return (
+    <div>
+      <p className={`mb-2 text-[10px] font-bold uppercase tracking-[2px] ${eyebrowColor}`}>
+        {eyebrow}
+      </p>
+      <ol className="space-y-2 text-sm text-brand-dark-blue">
+        {items.map((text, i) => (
+          <li key={i} className="flex gap-2.5">
+            <span
+              className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-brand-dark-blue ${bulletBg}`}
+            >
+              {i + 1}
+            </span>
+            <span className="leading-relaxed">{text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   )
 }

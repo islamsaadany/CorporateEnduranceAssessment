@@ -151,7 +151,7 @@ The product is **organizational** (not individual), **anonymous in aggregate** (
 - **Framework:** Next.js 16 (App Router) + React 19
 - **Language:** TypeScript 5.9
 - **Database:** PostgreSQL (Neon, serverless) + Prisma 5.x
-- **Auth (admin):** NextAuth.js v5, email/password credentials provider
+- **Auth (admin):** NextAuth.js v5, username/password credentials provider. Username is any string (not necessarily an email), stored in the `Admin.email` column for backwards compatibility. Super admin has an env-var-credentials recovery path: when `ADMIN_USERNAME` + `ADMIN_PASSWORD` are both set in the environment, a matching login form submission authenticates as super admin without consulting the DB password hash (the DB row is created/repaired on demand). When the env vars are unset, everyone — including super admin — falls back to the DB bcrypt hash.
 - **Auth (respondent):** 6-character access code (no app account)
 - **AI:** Provider-abstracted — Gemini (default) / Claude / OpenAI. Admin selects provider + supplies API key in admin panel; model name hardcoded per provider. Bootstrap fallback via env var with banner.
 - **PDF:** `@react-pdf/renderer` (server-side rendering)
