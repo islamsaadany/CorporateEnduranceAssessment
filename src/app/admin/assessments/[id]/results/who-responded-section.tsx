@@ -29,18 +29,22 @@ interface WhoRespondedSectionProps {
 }
 
 /**
- * Brand palette for demographic slices. Ordered light → dark so adjacent
- * slices have visible contrast when the chart cycles through them.
- * Six entries handles the largest slice count (5-band tenure + 1 spare);
- * if the department list grows beyond 6, we cycle.
+ * 10-color palette for pie slices. Brand-rooted but properly distinct
+ * (alignment 2026-05-03 — the previous 6-color set had too many close
+ * dark-blues). Slices cycle through this list; each slice in the same
+ * pie gets a different color.
  */
 const PIE_PALETTE = [
-  '#0B2545', // brand-dark-blue
-  '#D4A24C', // brand-ochre
-  '#13315C', // brand-dark-blue-soft
-  '#E9C98A', // brand-ochre-soft
-  '#5A6572', // brand-grey-text
-  '#A6B1BA', // mid-grey
+  '#0B2545', // brand dark blue
+  '#D4A24C', // brand ochre
+  '#C0392B', // terracotta
+  '#27AE60', // sage green
+  '#7E57C2', // soft plum
+  '#13315C', // brand dark blue soft
+  '#E9C98A', // brand ochre soft
+  '#5A6572', // brand grey
+  '#E67E22', // burnt orange
+  '#16A085', // teal
 ]
 
 interface Slice {
@@ -104,6 +108,15 @@ function SectionHeader({ total }: { total: number }) {
 }
 
 function PieCard({ title, slices, total }: { title: string; slices: Slice[]; total: number }) {
+  // Per-slice % label printed inside the slice (alignment 2026-05-03).
+  // Hide on slices < 5% of total — cramped labels look messy.
+  const renderLabel = (entry: { value?: number }) => {
+    const v = typeof entry.value === 'number' ? entry.value : 0
+    const pct = Math.round((v / total) * 100)
+    if (pct < 5) return ''
+    return `${pct}%`
+  }
+
   return (
     <div className="rounded border border-brand-grey-light bg-white p-4 shadow-sm">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-[2px] text-brand-ochre">
@@ -122,6 +135,10 @@ function PieCard({ title, slices, total }: { title: string; slices: Slice[]; tot
               outerRadius={60}
               paddingAngle={2}
               isAnimationActive={false}
+              label={renderLabel}
+              labelLine={false}
+              fontSize={11}
+              fontWeight={600}
             >
               {slices.map((_, i) => (
                 <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />
@@ -144,16 +161,16 @@ function PieCard({ title, slices, total }: { title: string; slices: Slice[]; tot
       </div>
       <ul className="mt-2 space-y-1 text-xs">
         {slices.map((s, i) => (
-          <li key={s.name} className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2 text-brand-dark-blue">
+          <li key={s.name} className="flex items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2 text-brand-dark-blue">
               <span
                 className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
                 style={{ backgroundColor: PIE_PALETTE[i % PIE_PALETTE.length] }}
               />
               <span className="truncate">{s.name}</span>
             </span>
-            <span className="shrink-0 text-brand-grey-text">
-              {Math.round((s.value / total) * 100)}%
+            <span className="shrink-0 tabular-nums text-brand-grey-text">
+              {s.value} · {Math.round((s.value / total) * 100)}%
             </span>
           </li>
         ))}
