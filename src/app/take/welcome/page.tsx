@@ -23,7 +23,7 @@ export default function WelcomePage() {
           your organization operates today.
         </p>
 
-        <p>The assessment has 30 statements, takes about 10–12 minutes, and works as follows:</p>
+        <p>The assessment has 42 statements, takes about 14–18 minutes, and works as follows:</p>
 
         <ul className="list-disc space-y-2 pl-5 text-ink-muted">
           <li>Each statement is rated on a 4-point scale, from <strong>1 — Strongly Disagree</strong> to <strong>4 — Strongly Agree</strong>.</li>

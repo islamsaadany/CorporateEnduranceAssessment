@@ -7,15 +7,14 @@
  *       · 2 departments (Sales, Engineering)
  *       · maxUses = 8 (the cap)
  *       · 5 sample Respondent rows pre-seeded so the report flow has data
- *           - 3 submitted with full answer sets
- *           - 1 in-progress (28 of 30 answers)
+ *           - 3 submitted with full answer sets (42 each)
+ *           - 1 in-progress (20 of 42 answers)
  *           - 1 fresh (started, no answers)
  *
  * Run with: `npm run seed`
  *
- * NOTE: this seed uses placeholder question IDs ("1a"..."15b"). The locked
- * question content lives in product-spec/02_questions.md and will move to
- * src/data/questions.ts in Phase 4.
+ * Question IDs ("1a"..."21b") match the canonical content in
+ * src/data/questions.ts and product-spec/02_questions - V2.md.
  */
 
 import { PrismaClient, AdminRole, AssessmentStatus, AiProvider, Level, TenureBand } from '@prisma/client'
@@ -23,8 +22,8 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-// 30 question ids: 1a, 1b, 2a, 2b, ... 15a, 15b
-const QUESTION_IDS: string[] = Array.from({ length: 15 }, (_, i) => i + 1).flatMap((n) => [
+// 42 question ids: 1a, 1b, 2a, 2b, ... 21a, 21b
+const QUESTION_IDS: string[] = Array.from({ length: 21 }, (_, i) => i + 1).flatMap((n) => [
   `${n}a`,
   `${n}b`,
 ])
@@ -140,9 +139,9 @@ async function main() {
         })),
       })
     } else if (i === 3) {
-      // In-progress: 14 of 30 questions answered
+      // In-progress: 20 of 42 questions answered
       await prisma.response.createMany({
-        data: QUESTION_IDS.slice(0, 14).map((qid, qi) => ({
+        data: QUESTION_IDS.slice(0, 20).map((qid, qi) => ({
           respondentId: created.id,
           questionId: qid,
           value: answerFor(i, qi),

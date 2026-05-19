@@ -22,9 +22,9 @@ export function QuestionCard({ position, total, eyebrow, questionId, questionTex
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Selection | null>(null)
   const [saving, setSaving] = useState(false)
-  // Q30 only: while the submit network call is in flight, lock the
-  // tiles + show "Submitting…" so the user doesn't double-click and
-  // hit a confusing already_submitted error after a successful submit.
+  // Last question only: while the submit network call is in flight,
+  // lock the tiles + show "Submitting…" so the user doesn't double-click
+  // and hit a confusing already_submitted error after a successful submit.
   const [submitting, setSubmitting] = useState(false)
 
   // Load respondent id + the existing answer for THIS question.

@@ -17,47 +17,59 @@ export const PILLAR_LABELS: Record<PillarKey, string> = {
 
 // ─── Capabilities ─────────────────────────────────────────────────────
 
-// Order matches the canonical numeric ID in product-spec/01 (1→5 within
-// Agility, 6→10 within Toughness, 11→15 within Resilience).
+// Order matches the canonical numeric ID in product-spec/01 V2 (1→7 within
+// Agility, 8→14 within Toughness, 15→21 within Resilience).
 export const CAPABILITY_ORDER: CapabilityKey[] = [
-  // Agility
+  // Agility (7)
   'decision_velocity',
   'market_signal_intelligence',
   'adaptive_governance',
   'experimentation_muscle',
   'delegation_empowerment',
-  // Toughness
-  'leadership_strength_under_pressure',
+  'digital_data_fluency',
+  'strategic_renewal_scenario_planning',
+  // Toughness (7)
+  'crisis_leadership',
+  'bench_depth_succession',
   'financial_shock_absorption',
   'operational_continuity',
   'risk_compliance_discipline',
   'trust_collaboration',
-  // Resilience
+  'cyber_technology_resilience',
+  // Resilience (7)
   'system_recoverability',
   'culture_of_grit_ownership',
   'learning_discipline',
-  'strategic_adaptability',
   'offensive_readiness',
+  'reputation_stakeholder_trust_recovery',
+  'vision_clarity_forward_mandate',
+  'workforce_recovery_re_engagement',
 ]
 
 // Display labels — use these verbatim in UI, copy, and reports.
-// Casing matches product-spec/01 ("Decision Velocity", not "decision velocity").
+// Casing matches product-spec/01 V2 ("Decision Velocity", not "decision velocity").
 export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   decision_velocity: 'Decision Velocity',
   market_signal_intelligence: 'Market & Signal Intelligence',
   adaptive_governance: 'Adaptive Governance',
   experimentation_muscle: 'Experimentation Muscle',
   delegation_empowerment: 'Delegation & Empowerment',
-  leadership_strength_under_pressure: 'Leadership Strength Under Pressure',
+  digital_data_fluency: 'Digital & Data Fluency',
+  strategic_renewal_scenario_planning: 'Strategic Renewal & Scenario Planning',
+  crisis_leadership: 'Crisis Leadership',
+  bench_depth_succession: 'Bench Depth & Succession',
   financial_shock_absorption: 'Financial Shock Absorption',
   operational_continuity: 'Operational Continuity',
   risk_compliance_discipline: 'Risk & Compliance Discipline',
   trust_collaboration: 'Trust & Collaboration',
+  cyber_technology_resilience: 'Cyber & Technology Resilience',
   system_recoverability: 'System Recoverability',
   culture_of_grit_ownership: 'Culture of Grit & Ownership',
   learning_discipline: 'Learning Discipline',
-  strategic_adaptability: 'Strategic Adaptability',
   offensive_readiness: 'Offensive Readiness',
+  reputation_stakeholder_trust_recovery: 'Reputation & Stakeholder Trust Recovery',
+  vision_clarity_forward_mandate: 'Vision Clarity & Forward Mandate',
+  workforce_recovery_re_engagement: 'Workforce Recovery & Re-engagement',
 }
 
 export const CAPABILITY_TO_PILLAR: Record<CapabilityKey, PillarKey> = {
@@ -66,16 +78,22 @@ export const CAPABILITY_TO_PILLAR: Record<CapabilityKey, PillarKey> = {
   adaptive_governance: 'agility',
   experimentation_muscle: 'agility',
   delegation_empowerment: 'agility',
-  leadership_strength_under_pressure: 'toughness',
+  digital_data_fluency: 'agility',
+  strategic_renewal_scenario_planning: 'agility',
+  crisis_leadership: 'toughness',
+  bench_depth_succession: 'toughness',
   financial_shock_absorption: 'toughness',
   operational_continuity: 'toughness',
   risk_compliance_discipline: 'toughness',
   trust_collaboration: 'toughness',
+  cyber_technology_resilience: 'toughness',
   system_recoverability: 'resilience',
   culture_of_grit_ownership: 'resilience',
   learning_discipline: 'resilience',
-  strategic_adaptability: 'resilience',
   offensive_readiness: 'resilience',
+  reputation_stakeholder_trust_recovery: 'resilience',
+  vision_clarity_forward_mandate: 'resilience',
+  workforce_recovery_re_engagement: 'resilience',
 }
 
 // ─── Likert scale ─────────────────────────────────────────────────────
@@ -189,9 +207,21 @@ export const BASELINE_ACTION_ITEMS: Record<CapabilityKey, [string, string]> = {
     'Define the specific decisions that must be pushed to the frontline and publish the boundaries.',
     'Coach senior leaders to stop pre-approving decisions their direct reports own.',
   ],
-  leadership_strength_under_pressure: [
-    'Build a successor plan for every critical role with named second-line leaders and development paths.',
-    'Run a crisis-leadership simulation annually with the top team to rehearse behaviors under stress.',
+  digital_data_fluency: [
+    'Audit data and AI tool gaps in the top 10 recurring decisions; close the most consequential ones within two quarters.',
+    'Embed data fluency expectations into role profiles and performance reviews for managers and above.',
+  ],
+  strategic_renewal_scenario_planning: [
+    'Run scenario planning at least annually against three plausible 5-year futures, with explicit triggers for strategy redesign.',
+    'Establish long-cycle reallocation authority that can shift >10% of capital between businesses outside the annual cycle.',
+  ],
+  crisis_leadership: [
+    'Define a crisis communication and decision protocol for the top team, including roles, cadence, and escalation.',
+    'Rehearse crisis behavior annually through a tabletop or live simulation involving the full executive team.',
+  ],
+  bench_depth_succession: [
+    'Maintain a named successor and active development plan for every role two layers below the CEO.',
+    'Pressure-test bench depth annually by simulating "leader out for 90 days" on critical roles.',
   ],
   financial_shock_absorption: [
     'Define explicit liquidity buffers and minimum cash reserves sized for realistic shock scenarios.',
@@ -209,6 +239,10 @@ export const BASELINE_ACTION_ITEMS: Record<CapabilityKey, [string, string]> = {
     'Invest in cross-functional operating rhythms and joint goals that reward collaboration.',
     'Address political behaviors visibly — signal that silos cost the team, especially under pressure.',
   ],
+  cyber_technology_resilience: [
+    'Define impact tolerances for critical services and run a live cyber incident exercise at least annually.',
+    'Maintain tested response playbooks for ransomware, third-party outage, and prolonged technology disruption scenarios.',
+  ],
   system_recoverability: [
     'Document and test disaster recovery for all critical systems — aim for measurable recovery time.',
     'Move toward modular architectures that allow partial system restoration during disruption.',
@@ -221,12 +255,20 @@ export const BASELINE_ACTION_ITEMS: Record<CapabilityKey, [string, string]> = {
     'Institute structured after-action reviews for every project exceeding a defined impact threshold.',
     "Create a quarterly 'lessons forum' where cross-functional learnings are captured and actioned.",
   ],
-  strategic_adaptability: [
-    'Formalize scenario planning into the strategy cycle — at least three plausible futures annually.',
-    "Build faster resource reallocation mechanisms that don't require full annual budget cycles.",
-  ],
   offensive_readiness: [
     'Define a growth thesis that specifies where the organization will invest when conditions stabilize.',
     'Pre-build investment playbooks with activation criteria, owners, and timelines.',
+  ],
+  reputation_stakeholder_trust_recovery: [
+    'Establish a stakeholder communication playbook covering customers, employees, regulators, and media for major disruptions.',
+    'After any significant incident, deliver visible accountability actions and a transparent change report within 90 days.',
+  ],
+  vision_clarity_forward_mandate: [
+    'Build a forward-direction template — a defined format with priority slots, named owner slots, and 30 / 60 / 90-day milestones — that leadership can populate within days of a major disruption.',
+    'Run a quarterly vision and priorities review with the top team so a renewed direction can be activated quickly when conditions shift.',
+  ],
+  workforce_recovery_re_engagement: [
+    'Develop a workforce pulse instrument now — capacity, engagement, and trust dimensions — and pre-position it for rapid deployment under stress.',
+    'Pre-build a re-engagement playbook covering workload rebalancing, manager support, and recognition protocols that can activate within days of a disruption.',
   ],
 }

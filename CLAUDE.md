@@ -143,7 +143,7 @@ Issue 1: Component X fetches data on every render
 ## Project Context
 
 ### What This App Is
-A web-based **team diagnostic** that measures an organization's endurance across three pillars — **Agility**, **Toughness**, **Resilience** — by aggregating responses from a group of senior leaders (5 capabilities × 2 angles × 3 pillars = 30 statements, 1–4 Likert + "I don't know") into an Organizational Endurance Profile. A Forefront consultant (admin) creates an assessment for a client, generates **one cohort code** per assessment, shares it manually with respondents, monitors responses during the collection window, and after closure generates an AI-assisted report (quantitative aggregation visible at any time; AI narrative locked until closure unless explicitly drafted as watermarked early). Built by **Forefront Consulting**.
+A web-based **team diagnostic** that measures an organization's endurance across three pillars — **Agility**, **Toughness**, **Resilience** — by aggregating responses from a group of senior leaders (7 capabilities × 2 angles × 3 pillars = 42 statements, 1–4 Likert + "I don't know") into an Organizational Endurance Profile. A Forefront consultant (admin) creates an assessment for a client, generates **one cohort code** per assessment, shares it manually with respondents, monitors responses during the collection window, and after closure generates an AI-assisted report (quantitative aggregation visible at any time; AI narrative locked until closure unless explicitly drafted as watermarked early). Built by **Forefront Consulting**.
 
 The product is **organizational** (not individual), **anonymous in aggregate** (≥3 respondents required for any view), **deadline-driven**, and produces **multi-variant filtered reports** suitable for boardroom presentation.
 
@@ -207,7 +207,7 @@ CorporateEnduranceAssessment/
     data/
       types.ts                     # Shared TypeScript types
       constants.ts                 # Pillar/capability content, level list, tenure bands, bands thresholds
-      questions.ts                 # 30 statements (locked content), pillar/capability/angle mapping
+      questions.ts                 # 42 statements (locked content, V2), pillar/capability/angle mapping
   prisma/
     schema.prisma                  # admins, assessments, respondents, responses, departments, settings, audit_log, generated_reports
     seed.ts                        # Super admin + sample assessment
@@ -220,8 +220,8 @@ CorporateEnduranceAssessment/
 - **Cohort access code** — ONE `Assessment.code` (6 chars, alphabet excludes `0/O/1/I/L`) shared by every respondent. `Assessment.maxUses` is a hard cap on demographics-completed respondents. There is **no per-respondent code**. Stored uppercased; case-insensitive on input. (Reversal logged 2026-04-29.)
 - **`demographicsCompletedAt` distinguishes real respondents from ghost rows** — A `Respondent` row is created at code-validation time; the row only "counts" (toward the cap, toward admin-table visibility) once `demographicsCompletedAt IS NOT NULL`. Validation creates a row; first demographics save stamps the timestamp. Ghosts (validated-then-bounced) are hidden from the admin UI and don't burn cap slots.
 - **1–4 Likert + "I don't know"** — `Response.value: Int?` with CHECK `(value IS NULL OR value BETWEEN 1 AND 4)`. NULL = "I don't know" (a deliberate non-answer that satisfies completion but is excluded from scoring). No neutral midpoint — see decisions log entry "Likert scale" 2026-04-29 for the full rule set.
-- **30-statement locked content** — Question text, pillar mapping, capability mapping, and "angle A vs angle B" are fixed in `src/data/questions.ts`. Not admin-editable in v1. Order is fixed across all respondents (Agility 1a–5b → Toughness 6a–10b → Resilience 11a–15b). The verbatim source of truth is `product-spec/02_questions.md`.
-- **Q30 auto-submits** — There is no respondent review screen. Selecting an answer for question 30 auto-submits and routes to `/take/done`. Mid-flow Back navigation still works for revisiting earlier answers before Q30.
+- **42-statement locked content (V2)** — Question text, pillar mapping, capability mapping, and "angle A vs angle B" are fixed in `src/data/questions.ts`. Not admin-editable in v1. Order is fixed across all respondents (Agility 1a–7b → Toughness 8a–14b → Resilience 15a–21b). The verbatim source of truth is `product-spec/02_questions - V2.md` (v0.1 / 30-question content kept at `02_questions.md` for historical reference).
+- **Q42 auto-submits** — There is no respondent review screen. Selecting an answer for the final question (Q42 under V2) auto-submits and routes to `/take/done`. The completeness check in `submit/route.ts` uses `TOTAL_QUESTIONS` from `questions.ts`, so the threshold tracks the question count automatically. Mid-flow Back navigation still works for revisiting earlier answers before the last question.
 - **Server-side scoring** *(Phase 6)* — Pillar / capability / spread / focus-area math runs in `src/lib/scoring.ts` on the server. NULL values are excluded from every mean. Capabilities with fewer than 3 rated answers across the filter are shown as "Insufficient data".
 - **≥3-respondent anonymity guardrail** *(Phase 6)* — Any view (company-wide or filtered) with fewer than 3 respondents is replaced by a lock message. Enforced in `src/lib/filters.ts` and respected by every results-page component **and** the AI generation endpoint. Counts SUBMITTED respondents — "I don't know" answers don't reduce the count.
 - **DB-backed AI report cache** *(Phase 7)* — `GeneratedReport` table keyed by `(assessment_id, filter_signature)`. Unlimited entries (no eviction). Invalidated when an admin edits any answer or demographic for that assessment (with warning modal). New generations overwrite the cache for that filter.
@@ -343,10 +343,10 @@ When making ANY UI change to a component file:
 4. If a UI file changed, confirm the snapshot was saved in `ui-versions/`
 
 ### After Making Changes to Assessment Content
-Assessment content (the 30 statements, pillar/capability mapping, band thresholds, level list, tenure bands) is **locked in code** — there is no admin editing in v1. It lives in:
-1. **`src/data/questions.ts`** — the 30 statements with `(pillar, capability, angle)` mapping
-2. **`src/data/constants.ts`** — pillar/capability metadata (display labels, ordering), `LEVELS`, `TENURE_BANDS`, `BAND_THRESHOLDS` (Critical Gap / Needs Work / Solid / Strong)
-3. **`product-spec/02_questions.md`** and **`product-spec/03_scoring_and_bands.md`** — human-readable source of truth for the same content
+Assessment content (the 42 statements under V2, pillar/capability mapping, band thresholds, level list, tenure bands) is **locked in code** — there is no admin editing in v1. It lives in:
+1. **`src/data/questions.ts`** — the 42 statements with `(pillar, capability, angle)` mapping
+2. **`src/data/constants.ts`** — pillar/capability metadata (21 capabilities, display labels, ordering), `LEVELS`, `TENURE_BANDS`, `BAND_THRESHOLDS` (Critical Gap / Needs Work / Solid / Strong)
+3. **`product-spec/02_questions - V2.md`** and **`product-spec/03_scoring_and_bands - V2.md`** — human-readable source of truth for the same content (v0.1 files preserved alongside for historical reference)
 
 **If you change any of the above, all three must move together.** A drift between code and `product-spec/` is a documentation bug; report it to the user before silently realigning.
 
@@ -383,14 +383,14 @@ Assessment content (the 30 statements, pillar/capability mapping, band threshold
 
 ## Current Framework Summary
 
-### Three Pillars × Five Capabilities × Two Angles = 30 statements
-| Pillar | Capabilities (5 each) |
+### Three Pillars × Seven Capabilities × Two Angles = 42 statements (V2)
+| Pillar | Capabilities (7 each) |
 |--------|------------------------|
-| **Agility** | Decision Velocity · Market & Signal Intelligence · Adaptive Governance · Experimentation Muscle · Delegation & Empowerment |
-| **Toughness** | Leadership Strength Under Pressure · Financial Shock Absorption · Operational Continuity · Risk & Compliance Discipline · Trust & Collaboration |
-| **Resilience** | System Recoverability · Culture of Grit & Ownership · Learning Discipline · Strategic Adaptability · Offensive Readiness |
+| **Agility** | Decision Velocity · Market & Signal Intelligence · Adaptive Governance · Experimentation Muscle · Delegation & Empowerment · Digital & Data Fluency · Strategic Renewal & Scenario Planning |
+| **Toughness** | Crisis Leadership · Bench Depth & Succession · Financial Shock Absorption · Operational Continuity · Risk & Compliance Discipline · Trust & Collaboration · Cyber & Technology Resilience |
+| **Resilience** | System Recoverability · Culture of Grit & Ownership · Learning Discipline · Offensive Readiness · Reputation & Stakeholder Trust Recovery · Vision Clarity & Forward Mandate · Workforce Recovery & Re-engagement |
 
-Each capability has **two statements** (angle A, angle B). **1–4 Likert + "I don't know"** (NULL = "I don't know" in `Response.value`, excluded from scoring). Full content lives in `product-spec/01_pillars_and_capabilities.md` and `product-spec/02_questions.md`.
+Each capability has **two statements** (angle A = Structure, angle B = Practice). **1–4 Likert + "I don't know"** (NULL = "I don't know" in `Response.value`, excluded from scoring). Full content lives in `product-spec/01_pillars_and_capabilities - V2.md` and `product-spec/02_questions - V2.md` (v0.1 / 15-capability versions kept alongside as historical reference).
 
 ### Scoring (server-side, Phase 6)
 - **Capability score (per respondent)** = mean of its rated answers (1–4). If both angles are "I don't know", the respondent doesn't contribute to that capability.
@@ -425,7 +425,7 @@ Any view (company-wide or filtered) with **fewer than 3 SUBMITTED respondents** 
 
 ### Report Structure (results page)
 1. **Summary** — Overall + 3 pillar scores with bands; "Preliminary — N of M responded" banner during collection
-2. **Capability Profile** — All 15 capabilities with score + spread, grouped by pillar
+2. **Capability Profile** — All 21 capabilities with score + spread, grouped by pillar (3 columns × 7 rows under V2)
 3. **Focus Areas** — Top-5 weakest capabilities with AI-adapted action items (post-AI-generation only)
 4. **Anonymized Individuals** — Per-respondent rows: letter label, demographics, capability scores. Names hidden by default; revealed only if the admin clicks "show names" (audit-logged)
 
@@ -437,7 +437,7 @@ Two filters side-by-side, **quantitative only** (no twin AI narratives in v1). B
 
 ---
 
-*Last Updated: 2026-05-02 (Phase 6 complete)*
+*Last Updated: 2026-05-19 (Phase 6 complete; V2 question framework adopted — 42 statements / 21 capabilities)*
 
 ### Built so far (as of 2026-05-02)
 

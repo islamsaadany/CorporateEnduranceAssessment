@@ -1,6 +1,6 @@
 // Section 2 — Capability Profile.
-// Spec 05 V2 § 4. Three columns side-by-side, one per pillar. Each column
-// has a compact pillar header + 7 capability rows.
+// Spec 05 § 4. Three columns side-by-side, one per pillar. Each column
+// has a compact pillar header + 5 capability rows.
 
 import {
   CAPABILITY_LABELS,

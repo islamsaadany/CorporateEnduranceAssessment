@@ -20,9 +20,9 @@ const SUPER_ADMIN_EMAIL = 'admin'
 const SUPER_ADMIN_PASSWORD = 'change-me-on-first-login'
 const SUPER_ADMIN_NAME = 'Super Admin'
 
-// --- Question IDs: 1a, 1b, 2a, 2b, ..., 15a, 15b ---
+// --- Question IDs: 1a, 1b, 2a, 2b, ..., 21a, 21b ---
 const QUESTION_IDS = []
-for (let n = 1; n <= 15; n++) {
+for (let n = 1; n <= 21; n++) {
   QUESTION_IDS.push(`${n}a`, `${n}b`)
 }
 
@@ -120,7 +120,7 @@ async function main() {
   out.push(``)
 
   // --- Responses ---
-  out.push(`-- Responses (submitted respondents have all 30; #4 has 14 of 30; #5 has zero).`)
+  out.push(`-- Responses (submitted respondents have all 42; #4 has 20 of 42; #5 has zero).`)
   out.push(`-- value=NULL means "I don't know" (a deliberate non-answer).`)
   const responseRows = []
   respondents.forEach((r, i) => {
@@ -129,7 +129,7 @@ async function main() {
         responseRows.push(`  ('${randomUUID()}', '${r.id}', '${qid}', ${answerFor(i, qi)}, NOW(), NOW())`)
       })
     } else if (i === 3) {
-      QUESTION_IDS.slice(0, 14).forEach((qid, qi) => {
+      QUESTION_IDS.slice(0, 20).forEach((qid, qi) => {
         responseRows.push(`  ('${randomUUID()}', '${r.id}', '${qid}', ${answerFor(i, qi)}, NOW(), NOW())`)
       })
     }

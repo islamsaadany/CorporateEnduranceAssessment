@@ -10,8 +10,9 @@
 > 2. **1–4 Likert + "I don't know"**, not 1–5. `Response.value` is `Int?` — `NULL` means "I don't know" and is excluded from scoring. (Logged 2026-04-29.)
 > 3. **4-tier `Level` enum**, not 5. Values: `individual_contributor`, `team_leader`, `manager`, `senior_leader`. Display labels are slash-joined merged names. (Logged 2026-04-29.)
 > 4. **`Respondent.demographicsCompletedAt`** distinguishes "real" respondents from ghost rows (validated-then-bounced). Cap checks + admin UI filter on this column. (Logged 2026-04-29.)
-> 5. **No respondent review screen.** Selecting an answer for question 30 auto-submits.
-> 6. **Capability names match `product-spec/01`** (Decision Velocity / Market & Signal Intelligence / etc.) — the early draft's names (Sensing / Decisiveness / etc.) are gone.
+> 5. **No respondent review screen.** Selecting an answer for the last question (Q42 under V2) auto-submits.
+> 6. **Capability names match `product-spec/01 V2`** (21 capabilities, 7 per pillar — Decision Velocity / Market & Signal Intelligence / Digital & Data Fluency / etc.).
+> 7. **V2 question framework.** 42 statements (21 capabilities × Structure + Practice), question IDs `1a…21b`. Bumped from v0.1's 30 statements / 15 capabilities on 2026-05-19. Existing response rows + cached reports were wiped via `prisma/sql/007_v2_questions_reset.sql`.
 
 ---
 
@@ -56,7 +57,8 @@ CorporateEnduranceAssessment/
 │       ├── 003_likert_scale.sql     # Migration: 1–5 Likert → 1–4 + "I don't know"
 │       ├── 004_levels_and_demographics.sql  # Migration: 4-tier Level + demographicsCompletedAt
 │       ├── 005_reset_super_admin_password.sql  # Reusable bcrypt password reset (pgcrypto)
-│       └── 006_acme_sample_data.sql # 50 submitted respondents × 8 departments for the Acme Corp (sample) assessment
+│       ├── 006_acme_sample_data.sql # 50 submitted respondents × 8 departments for the Acme Corp (sample) assessment (V2-aware: 42 answers each)
+│       └── 007_v2_questions_reset.sql # Migration: wipes Responses + unsubmits Respondents for the V2 42-question framework
 ├── scripts/
 │   ├── gen-seed-sql.mjs             # Emits 001_seed_sample_data.sql from seed.ts logic
 │   └── gen-acme-sample-data.ts      # Emits 006_acme_sample_data.sql with deterministic personas
@@ -103,7 +105,7 @@ CorporateEnduranceAssessment/
 │   │   │               ├── banners.tsx                       # PreliminaryBanner
 │   │   │               ├── lock-card.tsx                     # <3 respondents lock states
 │   │   │               ├── summary-section.tsx               # Hero panel (overall + 3 pillars + legend)
-│   │   │               ├── capability-profile-section.tsx    # 3 columns × 5 rows; spread/range; "Team is split" badge
+│   │   │               ├── capability-profile-section.tsx    # 3 columns × 7 rows (V2); spread/range; "Team is split" badge
 │   │   │               ├── focus-areas-section.tsx           # Top-5 weakest with baseline action items
 │   │   │               ├── individual-responses-section.tsx  # Table + heatmap (names shown directly in v1)
 │   │   │               ├── filter-modal.tsx                  # Multi-select chips + live preview (slice 6.3)
@@ -144,9 +146,9 @@ CorporateEnduranceAssessment/
 │   │   └── results-service.ts       # loadResults(): single source for the report page + API route (Phase 6)
 │   ├── proxy.ts                     # Next 16's renamed middleware — gates /admin/*
 │   └── data/
-│       ├── types.ts                 # PillarKey, CapabilityKey, ParsedFilter (multi-value), CapabilityResult/PillarResult/AggregatedResults, AiReportOutput, AnswerValue
-│       ├── constants.ts             # Pillar/capability metadata, LEVELS (4), TENURE_BANDS (5), BAND_THRESHOLDS (quartiles), LIKERT_VALUES, MIN_RESPONDENTS_FOR_VIEW, BAND_INTERPRETATION, BASELINE_ACTION_ITEMS, PILLAR_VERB_PAIRS
-│       └── questions.ts             # 30 verbatim statements + helpers (questionAtPosition, QUESTIONS_BY_ID)
+│       ├── types.ts                 # PillarKey, CapabilityKey (21 keys, V2), ParsedFilter (multi-value), CapabilityResult/PillarResult/AggregatedResults, AiReportOutput, AnswerValue
+│       ├── constants.ts             # Pillar/capability metadata (21 capabilities), LEVELS (4), TENURE_BANDS (5), BAND_THRESHOLDS (quartiles), LIKERT_VALUES, MIN_RESPONDENTS_FOR_VIEW, BAND_INTERPRETATION, BASELINE_ACTION_ITEMS, PILLAR_VERB_PAIRS
+│       └── questions.ts             # 42 verbatim statements + helpers (questionAtPosition, QUESTIONS_BY_ID)
 ├── public/                          # (.gitkeep — placeholder for Vercel/Next)
 ├── vercel.json                      # framework: nextjs + crons schedule
 ├── CLAUDE.md
@@ -271,7 +273,7 @@ enum TenureBand { lt_1y y1_3 y4_7 y8_15 gt_15y }
 model Response {
   id           String   @id @default(uuid())
   respondentId String
-  questionId   String                              // e.g. "1a", "1b", … "15b" — matches src/data/questions.ts
+  questionId   String                              // e.g. "1a", "1b", … "21b" (V2) — matches src/data/questions.ts
   // 1..4 if rated, NULL if respondent picked "I don't know".
   // Row existence = answered. NULL = explicit non-answer (still counts
   // toward submission completeness, but excluded from scoring).
@@ -374,7 +376,7 @@ All admin routes are gated by NextAuth session via `src/proxy.ts`. Respondent ro
 | ✅ | `GET` | `/api/respondents/[id]` | Full take-flow state: `{ respondent: {…}, assessment: {…}, answersByQuestionId: {…} }`. Used by demographics, question, and review pages. `value === undefined` → not answered; `null` → "I don't know"; `1..4` → rated. |
 | ✅ | `PATCH` | `/api/respondents/[id]/demographics` | Body: `{ name, departmentId, level, tenure }`. Name required (Zod min(1)). Cross-checks the department belongs to this assessment. Stamps `demographicsCompletedAt` on first successful save. Re-checks cap on first save. 410 if already submitted or closed. |
 | ✅ | `PATCH` | `/api/respondents/[id]/responses` | Body: `{ answers: [{ questionId, value }, …] }`. value = `1..4` rated or `null` "I don't know". Single transaction upsert. 410 if already submitted or closed. Rejects unknown question IDs. |
-| ✅ | `POST` | `/api/respondents/[id]/submit` | Demographics must be set; response row count must be ≥ 30. Sets `submittedAt`, audit-logs `respondent.submit`. 410 if already submitted or closed. |
+| ✅ | `POST` | `/api/respondents/[id]/submit` | Demographics must be set; response row count must be ≥ 42. Sets `submittedAt`, audit-logs `respondent.submit`. 410 if already submitted or closed. |
 
 ### Auth + Cron
 | Status | Method | Path | Purpose |
@@ -520,11 +522,11 @@ The technical reference above intentionally omits product/content rules. Use the
 | Topic | Spec file |
 |-------|-----------|
 | What the product is, who uses it | `product-spec/00_overview.md` |
-| Pillar / capability framework | `product-spec/01_pillars_and_capabilities.md` |
-| The 30 statements (locked content) | `product-spec/02_questions.md` |
-| Scoring math + bands + tie-break | `product-spec/03_scoring_and_bands.md` |
-| Recommendations / focus area copy | `product-spec/04_recommendations.md` |
-| Report sections and layout | `product-spec/05_report_structure.md` |
+| Pillar / capability framework (V2) | `product-spec/01_pillars_and_capabilities - V2.md` (canonical), v0.1 historical at `01_pillars_and_capabilities.md` |
+| The 42 statements (locked content, V2) | `product-spec/02_questions - V2.md` (canonical), `product-spec/02_questions.md` (historical v0.1 / 30-question framework) |
+| Scoring math + bands + tie-break (V2) | `product-spec/03_scoring_and_bands - V2.md` (canonical), v0.2 historical at `03_scoring_and_bands.md` |
+| Recommendations / focus area copy (V2) | `product-spec/04_recommendations - V2.md` (canonical), v0.1 historical at `04_recommendations.md` |
+| Report sections and layout (V2) | `product-spec/05_report_structure - V2.md` (canonical), v0.2 historical at `05_report_structure.md` |
 | Filters + segments + comparison view | `product-spec/06_report_filters_and_segments.md` |
 | Admin workflows | `product-spec/07_admin_workflows.md` |
 | Respondent workflows | `product-spec/08_respondent_workflows.md` |
@@ -533,7 +535,7 @@ The technical reference above intentionally omits product/content rules. Use the
 | Anonymity rules + ≥3 guardrail | `product-spec/11_anonymity_and_privacy.md` |
 | Visual design language | `product-spec/12_design_language.md` |
 | Glossary | `product-spec/13_glossary.md` |
-| AI prompts (system + user) | `product-spec/14_ai_prompts.md` |
+| AI prompts (system + user, V2) | `product-spec/14_ai_prompts - V2.md` (canonical), v0.3 historical at `14_ai_prompts.md` |
 | Report generation + caching rules | `product-spec/15_report_generation_and_caching.md` |
 
 **Rule:** if a behavior is described in `product-spec/`, do not re-describe it in this file. Reference the spec file. If the spec is wrong, fix the spec — this file follows the spec, not the other way around.

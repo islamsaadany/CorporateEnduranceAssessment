@@ -45,13 +45,16 @@ import type { GenerateReportInput } from './types'
  * v3: Per-focus-area split into Observations (1-3 correlation bullets,
  *     ≤30 words) + Actions (1-3 concrete items, ≤25 words). Replaces
  *     v2's flat per-capability `action_items` (spec 14 v0.3).
+ * v4: 21-capability framework (7 per pillar, 42 statements). System
+ *     prompt updated from "15 underlying capabilities" to "21". No
+ *     output-shape changes (spec 14 V2 / spec 02 V2).
  */
-export const CURRENT_PROMPT_VERSION = 3
+export const CURRENT_PROMPT_VERSION = 4
 
 /**
  * Mirrors product-spec/14_ai_prompts.md § 2.
  */
-const SYSTEM_PROMPT = `You are a senior consultant at Forefront Consulting writing a brief board-grade report for a client's leadership team. The client has just completed an Endurance Assessment that measures the organization across three pillars — Agility (sense and move), Toughness (absorb and hold), and Resilience (recover and renew) — and 15 underlying capabilities.
+const SYSTEM_PROMPT = `You are a senior consultant at Forefront Consulting writing a brief board-grade report for a client's leadership team. The client has just completed an Endurance Assessment that measures the organization across three pillars — Agility (sense and move), Toughness (absorb and hold), and Resilience (recover and renew) — and 21 underlying capabilities.
 
 You will be given:
 - The aggregated team scores per pillar and per capability (band labels only)

@@ -4,28 +4,34 @@
 export type PillarKey = 'agility' | 'toughness' | 'resilience'
 
 export type CapabilityKey =
-  // Agility
+  // Agility (7)
   | 'decision_velocity'
   | 'market_signal_intelligence'
   | 'adaptive_governance'
   | 'experimentation_muscle'
   | 'delegation_empowerment'
-  // Toughness
-  | 'leadership_strength_under_pressure'
+  | 'digital_data_fluency'
+  | 'strategic_renewal_scenario_planning'
+  // Toughness (7)
+  | 'crisis_leadership'
+  | 'bench_depth_succession'
   | 'financial_shock_absorption'
   | 'operational_continuity'
   | 'risk_compliance_discipline'
   | 'trust_collaboration'
-  // Resilience
+  | 'cyber_technology_resilience'
+  // Resilience (7)
   | 'system_recoverability'
   | 'culture_of_grit_ownership'
   | 'learning_discipline'
-  | 'strategic_adaptability'
   | 'offensive_readiness'
+  | 'reputation_stakeholder_trust_recovery'
+  | 'vision_clarity_forward_mandate'
+  | 'workforce_recovery_re_engagement'
 
 export type Angle = 'a' | 'b'
 
-// "1a", "1b", … "15b"
+// "1a", "1b", … "21b"
 export type QuestionId = `${number}${Angle}`
 
 // 1–4 Likert (no neutral). NULL means the respondent picked "I don't know"

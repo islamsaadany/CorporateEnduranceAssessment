@@ -4,18 +4,21 @@
  *   - 6 new departments on the existing "Acme Corp (sample)" assessment
  *   - 50 new submitted respondents distributed across all 8 departments,
  *     with realistic variety in level, tenure, and capability ratings
- *   - 30 response rows per respondent (1,500 total)
+ *   - 42 response rows per respondent (2,100 total)
  *
  * The output SQL is **idempotent**: re-running replaces the same 50
  * respondents and their responses without duplication. UUIDs are
  * derived from a fixed seed so each run produces the same values.
  *
- * Designed to give the report a recognizable shape:
- *   - Critical Gap: Offensive Readiness
+ * Designed to give the report a recognizable shape across the V2
+ * 21-capability framework so every band lands at least once:
+ *   - Critical Gap: Offensive Readiness, Workforce Recovery & Re-engagement
  *   - Strong: Risk & Compliance Discipline, Experimentation Muscle,
- *     Leadership Strength Under Pressure
+ *     Crisis Leadership
  *   - Needs Work: Adaptive Governance, Learning Discipline,
- *     Strategic Adaptability, Decision Velocity
+ *     Strategic Renewal & Scenario Planning, Decision Velocity,
+ *     Digital & Data Fluency, Reputation & Stakeholder Trust Recovery,
+ *     Vision Clarity & Forward Mandate
  *   - Solid: the remaining capabilities
  *
  * Run inside the project root:
@@ -24,28 +27,38 @@
 
 import { writeFileSync } from 'fs'
 
-// 30 question ids: 1a, 1b, 2a, 2b, …, 15a, 15b
+// 42 question ids: 1a, 1b, 2a, 2b, …, 21a, 21b
 const QUESTION_IDS: string[] = []
-for (let n = 1; n <= 15; n++) QUESTION_IDS.push(`${n}a`, `${n}b`)
+for (let n = 1; n <= 21; n++) QUESTION_IDS.push(`${n}a`, `${n}b`)
 
 // Per-capability target team mean (1.00–4.00). Drives the "shape" of the
 // report so each band has at least one capability that lands in it.
+// Indexed by the V2 capability number (1-21).
 const CAPABILITY_TARGETS: Record<number, number> = {
-  1: 2.4,  // decision_velocity                      — Needs Work
-  2: 2.8,  // market_signal_intelligence             — Solid
-  3: 2.2,  // adaptive_governance                    — Needs Work
-  4: 3.5,  // experimentation_muscle                 — Strong
-  5: 2.7,  // delegation_empowerment                 — Solid
-  6: 3.4,  // leadership_strength_under_pressure     — Strong
-  7: 3.2,  // financial_shock_absorption             — Solid
-  8: 2.9,  // operational_continuity                 — Solid
-  9: 3.7,  // risk_compliance_discipline             — Strong
-  10: 3.0, // trust_collaboration                    — Solid
-  11: 2.8, // system_recoverability                  — Solid
-  12: 2.6, // culture_of_grit_ownership              — Solid
-  13: 2.0, // learning_discipline                    — Needs Work
-  14: 2.4, // strategic_adaptability                 — Needs Work
-  15: 1.7, // offensive_readiness                    — Critical Gap
+  // Agility (1-7)
+  1: 2.4,  // decision_velocity                       — Needs Work
+  2: 2.8,  // market_signal_intelligence              — Solid
+  3: 2.2,  // adaptive_governance                     — Needs Work
+  4: 3.5,  // experimentation_muscle                  — Strong
+  5: 2.7,  // delegation_empowerment                  — Solid
+  6: 2.3,  // digital_data_fluency                    — Needs Work
+  7: 2.4,  // strategic_renewal_scenario_planning     — Needs Work
+  // Toughness (8-14)
+  8: 3.4,  // crisis_leadership                       — Strong
+  9: 3.0,  // bench_depth_succession                  — Solid
+  10: 3.2, // financial_shock_absorption              — Solid
+  11: 2.9, // operational_continuity                  — Solid
+  12: 3.7, // risk_compliance_discipline              — Strong
+  13: 3.0, // trust_collaboration                     — Solid
+  14: 2.6, // cyber_technology_resilience             — Solid
+  // Resilience (15-21)
+  15: 2.8, // system_recoverability                   — Solid
+  16: 2.6, // culture_of_grit_ownership               — Solid
+  17: 2.0, // learning_discipline                     — Needs Work
+  18: 1.7, // offensive_readiness                     — Critical Gap
+  19: 2.3, // reputation_stakeholder_trust_recovery   — Needs Work
+  20: 2.1, // vision_clarity_forward_mandate          — Needs Work
+  21: 1.6, // workforce_recovery_re_engagement        — Critical Gap
 }
 
 const NEW_DEPARTMENTS = [
@@ -190,8 +203,8 @@ function buildSql(): string {
 
   push('-- ─── Acme Corp (sample) — 50 submitted respondents ────────────')
   push('--')
-  push('-- Adds 6 new departments and 50 submitted respondents (with all 30')
-  push('-- responses each = 1,500 response rows) to the existing')
+  push('-- Adds 6 new departments and 50 submitted respondents (with all 42')
+  push('-- responses each = 2,100 response rows) to the existing')
   push('-- "Acme Corp (sample)" assessment so the report page can be')
   push('-- exercised across multiple departments, levels, and tenures.')
   push('--')
@@ -255,7 +268,7 @@ function buildSql(): string {
   push('')
 
   // 4. Responses (chunked into multiple INSERTs to keep each statement small)
-  push('-- 4. Insert 1,500 response rows (50 respondents × 30 questions)')
+  push('-- 4. Insert 2,100 response rows (50 respondents × 42 questions)')
   const CHUNK = 250
   for (let start = 0; start < responses.length; start += CHUNK) {
     const chunk = responses.slice(start, start + CHUNK)
@@ -274,7 +287,7 @@ function buildSql(): string {
 
   // 5. Verification
   push('-- 5. Verification — should show maxUses=60, 8 departments, ≥53 submitted respondents,')
-  push('--    and 1,500 + (existing seed responses) total response rows.')
+  push('--    and 2,100 + (existing seed responses) total response rows.')
   push('SELECT')
   push(`  (SELECT "maxUses" FROM "Assessment" WHERE "clientName" = 'Acme Corp (sample)') AS max_uses,`)
   push(`  (SELECT COUNT(*) FROM "Department" WHERE "assessmentId" = (SELECT id FROM "Assessment" WHERE "clientName" = 'Acme Corp (sample)')) AS departments,`)
